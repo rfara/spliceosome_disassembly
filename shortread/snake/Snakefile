@@ -137,6 +137,7 @@ rule build_rrna_index:
         str(ENV_YAML)
     params:
         prefix=RRNA_INDEX_PREFIX,
+        benchmark_dir=str(Path(benchmark_path("reference", "rrna_bowtie2_build.tsv")).parent),
         cluster=slurm_cluster_args(
             "c_short",
             "16G",
@@ -147,7 +148,7 @@ rule build_rrna_index:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {params.prefix})" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "$(dirname {params.prefix})" "$(dirname {log})" "{params.benchmark_dir}"
         bowtie2-build \
           --threads {threads} \
           {input.fasta} \
@@ -170,6 +171,7 @@ rule build_snrna_index:
         str(ENV_YAML)
     params:
         prefix=SNRNA_INDEX_PREFIX,
+        benchmark_dir=str(Path(benchmark_path("reference", "snrna_bowtie2_build.tsv")).parent),
         cluster=slurm_cluster_args(
             "c_short",
             "16G",
@@ -180,7 +182,7 @@ rule build_snrna_index:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {params.prefix})" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "$(dirname {params.prefix})" "$(dirname {log})" "{params.benchmark_dir}"
         bowtie2-build \
           --threads {threads} \
           {input.fasta} \
@@ -205,6 +207,7 @@ rule build_star_index:
     params:
         sjdb_overhang=config["star"]["sjdb_overhang"],
         extra=STAR_GENOME_GENERATE_EXTRA,
+        benchmark_dir=str(Path(benchmark_path("reference", "star_genome_generate.tsv")).parent),
         cluster=slurm_cluster_args(
             "h_medium",
             "256G",
@@ -215,7 +218,7 @@ rule build_star_index:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p {output} "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p {output} "$(dirname {log})" "{params.benchmark_dir}"
         STAR \
           --runMode genomeGenerate \
           --runThreadN {threads} \
@@ -245,6 +248,7 @@ rule trim_reads:
         times=config["trim"]["times"],
         adapter_args=lambda wildcards: TRIM_ADAPTER_ARGS,
         extra=config["trim"].get("extra", ""),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("trim", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_short",
             "16G",
@@ -255,7 +259,7 @@ rule trim_reads:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output})" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "$(dirname {output})" "$(dirname {log})" "{params.benchmark_dir}"
         cutadapt \
           -j {threads} \
           --minimum-length {params.min_length} \
@@ -283,6 +287,7 @@ rule extract_umis:
     params:
         extract_method=config["umi"]["extract_method"],
         bc_pattern=lambda wildcards: config["umi"]["bc_pattern"],
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("umi", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
             "24G",
@@ -293,7 +298,7 @@ rule extract_umis:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.extracted})" "$(dirname {output.filtered})" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "$(dirname {output.extracted})" "$(dirname {output.filtered})" "$(dirname {log})" "{params.benchmark_dir}"
         umi_tools extract \
           --extract-method={params.extract_method} \
           --bc-pattern={params.bc_pattern:q} \
@@ -321,6 +326,7 @@ rule premap_rrna:
     params:
         index_prefix=RRNA_INDEX_PREFIX,
         args=PREMAP_ARGS,
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_rrna", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
             "32G",
@@ -331,7 +337,7 @@ rule premap_rrna:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "{params.benchmark_dir}"
         bowtie2 \
           --threads {threads} \
           -x {params.index_prefix} \
@@ -363,6 +369,7 @@ rule premap_snrna:
     params:
         index_prefix=SNRNA_INDEX_PREFIX,
         args=PREMAP_ARGS,
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_snrna", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
             "32G",
@@ -373,7 +380,7 @@ rule premap_snrna:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "{params.benchmark_dir}"
         bowtie2 \
           --threads {threads} \
           -x {params.index_prefix} \
@@ -407,6 +414,7 @@ rule map_genome_star:
         prefix=lambda wildcards: results_path("star", f"{wildcards.sample}."),
         sort_ram=config["star"]["limit_bam_sort_ram"],
         align_extra=STAR_ALIGN_EXTRA,
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("star", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "h_medium",
             "96G",
@@ -417,7 +425,7 @@ rule map_genome_star:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "{params.benchmark_dir}"
         STAR \
           --runThreadN {threads} \
           --genomeDir {input.index} \
@@ -455,6 +463,7 @@ rule deduplicate_bam:
         method=config["dedup"]["method"],
         multimap_tag=config["dedup"]["multimapping_detection_method"],
         extra=config["dedup"].get("extra", ""),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("dedup", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "h_medium",
             "128G",
@@ -465,7 +474,7 @@ rule deduplicate_bam:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.bam})" "{params.temp_dir}" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "$(dirname {output.bam})" "{params.temp_dir}" "$(dirname {log})" "{params.benchmark_dir}"
         umi_tools dedup \
           --stdin={input.bam} \
           --log={log} \
@@ -497,6 +506,7 @@ rule index_deduplicated_bam:
     conda:
         str(ENV_YAML)
     params:
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("dedup_index", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_short",
             "8G",
@@ -507,6 +517,6 @@ rule index_deduplicated_bam:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "$(dirname {benchmark})"
+        mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "{params.benchmark_dir}"
         samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
         """
