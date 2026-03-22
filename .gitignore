@@ -1,2 +1,5 @@
 shortread/reads
+shortread/snake/results
+shortread/snake/benchmarks
+shortread/snake/logs
 shortread/snake/example_snakefile.yaml
