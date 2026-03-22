@@ -207,7 +207,7 @@ rule build_star_index:
         extra=STAR_GENOME_GENERATE_EXTRA,
         cluster=slurm_cluster_args(
             "h_medium",
-            "64G",
+            "256G",
             "star_idx",
             log_path("slurm", "star_index.%A.log"),
             config["resources"]["star_index_threads"],
