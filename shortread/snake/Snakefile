@@ -243,7 +243,7 @@ rule trim_reads:
     params:
         min_length=config["trim"]["min_length"],
         times=config["trim"]["times"],
-        adapter_args=TRIM_ADAPTER_ARGS,
+        adapter_args=lambda wildcards: TRIM_ADAPTER_ARGS,
         extra=config["trim"].get("extra", ""),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_short",
@@ -282,7 +282,7 @@ rule extract_umis:
         str(ENV_YAML)
     params:
         extract_method=config["umi"]["extract_method"],
-        bc_pattern=config["umi"]["bc_pattern"],
+        bc_pattern=lambda wildcards: config["umi"]["bc_pattern"],
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
             "24G",
