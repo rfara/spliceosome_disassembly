@@ -32,4 +32,4 @@ snakemake -s shortread/snake/Snakefile \
   --cluster-generic-submit-cmd "sbatch {params.cluster}"
 ```
 
-The workflow currently maps short jobs to `c_short` or `h_short` and medium jobs to `c_medium` or `h_medium`, with time limits configured in `shortread/snake/config.yaml`.
+The workflow currently maps short jobs to `c_short` or `m_short` and medium jobs to `c_medium` or `m_medium`, with time limits configured in `shortread/snake/config.yaml`.

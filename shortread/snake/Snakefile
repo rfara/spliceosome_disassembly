@@ -209,7 +209,7 @@ rule build_star_index:
         extra=STAR_GENOME_GENERATE_EXTRA,
         benchmark_dir=str(Path(benchmark_path("reference", "star_genome_generate.tsv")).parent),
         cluster=slurm_cluster_args(
-            "h_medium",
+            "m_medium",
             "256G",
             "star_idx",
             log_path("slurm", "star_index.%A.log"),
@@ -416,8 +416,8 @@ rule map_genome_star:
         align_extra=STAR_ALIGN_EXTRA,
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("star", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
-            "h_medium",
-            "96G",
+            "c_medium",
+            "32G",
             "star_map",
             log_path("slurm", f"star_map.{wildcards.sample}.%A.log"),
             config["resources"]["star_map_threads"],
@@ -465,7 +465,7 @@ rule deduplicate_bam:
         extra=config["dedup"].get("extra", ""),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("dedup", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
-            "h_medium",
+            "m_medium",
             "128G",
             "umi_dedup",
             log_path("slurm", f"umi_dedup.{wildcards.sample}.%A.log"),
