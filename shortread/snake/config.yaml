@@ -44,6 +44,12 @@ dedup:
   samtools_sort_memory: 2G
   extra: ""
 
+slurm:
+  time_limits:
+    short: "08:00:00"
+    medium: "2-00:00:00"
+  sbatch_extra: ""
+
 resources:
   trim_threads: 8
   bowtie2_build_threads: 8

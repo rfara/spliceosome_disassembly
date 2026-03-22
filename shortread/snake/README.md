@@ -21,3 +21,15 @@ snakemake -s shortread/snake/Snakefile --cores 16 --use-conda
 ```
 
 The main parameter you may want to adjust before the first run is `star.sjdb_overhang` in `shortread/snake/config.yaml`, which should match read length minus one.
+
+For SLURM submission with Snakemake 8, each rule exposes an `sbatch` argument string in `params.cluster`. A typical cluster invocation is:
+
+```bash
+snakemake -s shortread/snake/Snakefile \
+  --use-conda \
+  --jobs 50 \
+  --executor cluster-generic \
+  --cluster-generic-submit-cmd "sbatch {params.cluster}"
+```
+
+The workflow currently maps short jobs to `c_short` or `h_short` and medium jobs to `c_medium` or `h_medium`, with time limits configured in `shortread/snake/config.yaml`.

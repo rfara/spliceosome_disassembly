@@ -47,6 +47,7 @@ BT2_SUFFIXES = [
 RRNA_INDEX_PREFIX = results_path("reference", "rrna", "rrna")
 SNRNA_INDEX_PREFIX = results_path("reference", "snrna", "snrna")
 STAR_INDEX_DIR = results_path("reference", "star_genome")
+SLURM_TIME_LIMITS = config["slurm"]["time_limits"]
 
 
 def bowtie2_index_outputs(prefix):
@@ -92,6 +93,24 @@ def star_align_extra():
     return extra
 
 
+def slurm_cluster_args(qos, mem, job_name, slurm_log_file, threads):
+    partition, tier = qos.split("_", 1)
+    time_limit = SLURM_TIME_LIMITS[tier]
+    parts = [
+        f"--partition={partition}",
+        f"--qos={qos}",
+        f"--time={time_limit}",
+        f"--mem={mem}",
+        f"--cpus-per-task={threads}",
+        f"-J {job_name}",
+        f"-o {slurm_log_file}",
+    ]
+    extra = config["slurm"].get("sbatch_extra", "").strip()
+    if extra:
+        parts.append(extra)
+    return " ".join(parts)
+
+
 TRIM_ADAPTER_ARGS = cutadapt_adapter_args()
 PREMAP_ARGS = bowtie2_preset(config["premap"])
 STAR_GENOME_GENERATE_EXTRA = star_genome_generate_extra()
@@ -117,7 +136,14 @@ rule build_rrna_index:
     conda:
         str(ENV_YAML)
     params:
-        prefix=RRNA_INDEX_PREFIX
+        prefix=RRNA_INDEX_PREFIX,
+        cluster=slurm_cluster_args(
+            "c_short",
+            "16G",
+            "rrna_idx",
+            log_path("slurm", "rrna_index.%A.log"),
+            config["resources"]["bowtie2_build_threads"],
+        )
     shell:
         r"""
         set -euo pipefail
@@ -143,7 +169,14 @@ rule build_snrna_index:
     conda:
         str(ENV_YAML)
     params:
-        prefix=SNRNA_INDEX_PREFIX
+        prefix=SNRNA_INDEX_PREFIX,
+        cluster=slurm_cluster_args(
+            "c_short",
+            "16G",
+            "snrna_idx",
+            log_path("slurm", "snrna_index.%A.log"),
+            config["resources"]["bowtie2_build_threads"],
+        )
     shell:
         r"""
         set -euo pipefail
@@ -171,7 +204,14 @@ rule build_star_index:
         str(ENV_YAML)
     params:
         sjdb_overhang=config["star"]["sjdb_overhang"],
-        extra=STAR_GENOME_GENERATE_EXTRA
+        extra=STAR_GENOME_GENERATE_EXTRA,
+        cluster=slurm_cluster_args(
+            "h_medium",
+            "64G",
+            "star_idx",
+            log_path("slurm", "star_index.%A.log"),
+            config["resources"]["star_index_threads"],
+        )
     shell:
         r"""
         set -euo pipefail
@@ -204,7 +244,14 @@ rule trim_reads:
         min_length=config["trim"]["min_length"],
         times=config["trim"]["times"],
         adapter_args=TRIM_ADAPTER_ARGS,
-        extra=config["trim"].get("extra", "")
+        extra=config["trim"].get("extra", ""),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "16G",
+            "trim",
+            log_path("slurm", f"trim.{wildcards.sample}.%A.log"),
+            config["resources"]["trim_threads"],
+        )
     shell:
         r"""
         set -euo pipefail
@@ -235,7 +282,14 @@ rule extract_umis:
         str(ENV_YAML)
     params:
         extract_method=config["umi"]["extract_method"],
-        bc_pattern=config["umi"]["bc_pattern"]
+        bc_pattern=config["umi"]["bc_pattern"],
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "24G",
+            "umi_extract",
+            log_path("slurm", f"umi_extract.{wildcards.sample}.%A.log"),
+            1,
+        )
     shell:
         r"""
         set -euo pipefail
@@ -266,7 +320,14 @@ rule premap_rrna:
         str(ENV_YAML)
     params:
         index_prefix=RRNA_INDEX_PREFIX,
-        args=PREMAP_ARGS
+        args=PREMAP_ARGS,
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "32G",
+            "rrna_map",
+            log_path("slurm", f"rrna_map.{wildcards.sample}.%A.log"),
+            config["resources"]["premap_threads"],
+        )
     shell:
         r"""
         set -euo pipefail
@@ -301,7 +362,14 @@ rule premap_snrna:
         str(ENV_YAML)
     params:
         index_prefix=SNRNA_INDEX_PREFIX,
-        args=PREMAP_ARGS
+        args=PREMAP_ARGS,
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "32G",
+            "snrna_map",
+            log_path("slurm", f"snrna_map.{wildcards.sample}.%A.log"),
+            config["resources"]["premap_threads"],
+        )
     shell:
         r"""
         set -euo pipefail
@@ -338,7 +406,14 @@ rule map_genome_star:
     params:
         prefix=lambda wildcards: results_path("star", f"{wildcards.sample}."),
         sort_ram=config["star"]["limit_bam_sort_ram"],
-        align_extra=STAR_ALIGN_EXTRA
+        align_extra=STAR_ALIGN_EXTRA,
+        cluster=lambda wildcards: slurm_cluster_args(
+            "h_medium",
+            "96G",
+            "star_map",
+            log_path("slurm", f"star_map.{wildcards.sample}.%A.log"),
+            config["resources"]["star_map_threads"],
+        )
     shell:
         r"""
         set -euo pipefail
@@ -379,7 +454,14 @@ rule deduplicate_bam:
         sort_memory=config["dedup"]["samtools_sort_memory"],
         method=config["dedup"]["method"],
         multimap_tag=config["dedup"]["multimapping_detection_method"],
-        extra=config["dedup"].get("extra", "")
+        extra=config["dedup"].get("extra", ""),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "h_medium",
+            "128G",
+            "umi_dedup",
+            log_path("slurm", f"umi_dedup.{wildcards.sample}.%A.log"),
+            config["resources"]["dedup_sort_threads"],
+        )
     shell:
         r"""
         set -euo pipefail
@@ -414,6 +496,14 @@ rule index_deduplicated_bam:
     threads: config["resources"]["samtools_index_threads"]
     conda:
         str(ENV_YAML)
+    params:
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bam_index",
+            log_path("slurm", f"bam_index.{wildcards.sample}.%A.log"),
+            config["resources"]["samtools_index_threads"],
+        )
     shell:
         r"""
         set -euo pipefail
