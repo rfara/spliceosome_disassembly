@@ -28,6 +28,7 @@ For SLURM submission with Snakemake 8, each rule exposes an `sbatch` argument st
 snakemake -s shortread/snake/Snakefile \
   --use-conda \
   --jobs 50 \
+  --latency-wait 60 \
   --executor cluster-generic \
   --cluster-generic-submit-cmd "sbatch {params.cluster}"
 ```

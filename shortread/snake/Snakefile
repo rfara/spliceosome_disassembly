@@ -115,6 +115,40 @@ TRIM_ADAPTER_ARGS = cutadapt_adapter_args()
 PREMAP_ARGS = bowtie2_preset(config["premap"])
 STAR_GENOME_GENERATE_EXTRA = star_genome_generate_extra()
 STAR_ALIGN_EXTRA = star_align_extra()
+INIT_SENTINEL = results_path(".workflow_dirs_initialized")
+WORKFLOW_DIRS = [
+    results_path("reference", "rrna"),
+    results_path("reference", "snrna"),
+    results_path("reference", "star_genome"),
+    results_path("trimmed"),
+    results_path("umi"),
+    results_path("umi", "filtered"),
+    results_path("premap_rrna"),
+    results_path("premap_snrna"),
+    results_path("star"),
+    results_path("dedup"),
+    results_path("tmp", "umi_dedup"),
+    log_path("reference"),
+    log_path("trim"),
+    log_path("umi"),
+    log_path("premap_rrna"),
+    log_path("premap_snrna"),
+    log_path("star"),
+    log_path("dedup"),
+    log_path("dedup_index"),
+    log_path("slurm"),
+    benchmark_path("reference"),
+    benchmark_path("trim"),
+    benchmark_path("umi"),
+    benchmark_path("premap_rrna"),
+    benchmark_path("premap_snrna"),
+    benchmark_path("star"),
+    benchmark_path("dedup"),
+    benchmark_path("dedup_index"),
+]
+
+
+localrules: initialize_workdirs
 
 
 rule all:
@@ -123,8 +157,20 @@ rule all:
         expand(results_path("dedup", "{sample}.dedup.bam.bai"), sample=SAMPLES),
 
 
+rule initialize_workdirs:
+    output:
+        touch(INIT_SENTINEL)
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {WORKFLOW_DIRS:q}
+        touch {output}
+        """
+
+
 rule build_rrna_index:
     input:
+        init=INIT_SENTINEL,
         fasta=repo_path(config["references"]["rrna_fasta"])
     output:
         bowtie2_index_outputs(RRNA_INDEX_PREFIX)
@@ -159,6 +205,7 @@ rule build_rrna_index:
 
 rule build_snrna_index:
     input:
+        init=INIT_SENTINEL,
         fasta=repo_path(config["references"]["snrna_fasta"])
     output:
         bowtie2_index_outputs(SNRNA_INDEX_PREFIX)
@@ -193,6 +240,7 @@ rule build_snrna_index:
 
 rule build_star_index:
     input:
+        init=INIT_SENTINEL,
         fasta=repo_path(config["references"]["genome_fasta"]),
         gtf=repo_path(config["references"]["genome_gtf"])
     output:
@@ -233,7 +281,8 @@ rule build_star_index:
 
 rule trim_reads:
     input:
-        sample_fastq
+        init=INIT_SENTINEL,
+        fastq=sample_fastq
     output:
         temp(results_path("trimmed", "{sample}.trimmed.fastq.gz"))
     log:
@@ -267,14 +316,15 @@ rule trim_reads:
           {params.adapter_args} \
           {params.extra} \
           -o {output} \
-          {input} \
+          {input.fastq} \
           > {log} 2>&1
         """
 
 
 rule extract_umis:
     input:
-        results_path("trimmed", "{sample}.trimmed.fastq.gz")
+        init=INIT_SENTINEL,
+        fastq=results_path("trimmed", "{sample}.trimmed.fastq.gz")
     output:
         extracted=results_path("umi", "{sample}.umi_extracted.fastq.gz"),
         filtered=results_path("umi", "filtered", "{sample}.regex_mismatch.fastq.gz")
@@ -302,7 +352,7 @@ rule extract_umis:
         umi_tools extract \
           --extract-method={params.extract_method} \
           --bc-pattern={params.bc_pattern:q} \
-          --stdin={input} \
+          --stdin={input.fastq} \
           --stdout={output.extracted} \
           --filtered-out={output.filtered} \
           --log={log}
@@ -311,6 +361,7 @@ rule extract_umis:
 
 rule premap_rrna:
     input:
+        init=INIT_SENTINEL,
         fastq=results_path("umi", "{sample}.umi_extracted.fastq.gz"),
         index=bowtie2_index_outputs(RRNA_INDEX_PREFIX)
     output:
@@ -354,6 +405,7 @@ rule premap_rrna:
 
 rule premap_snrna:
     input:
+        init=INIT_SENTINEL,
         fastq=results_path("premap_rrna", "{sample}.rrna_unmapped.fastq.gz"),
         index=bowtie2_index_outputs(SNRNA_INDEX_PREFIX)
     output:
@@ -397,6 +449,7 @@ rule premap_snrna:
 
 rule map_genome_star:
     input:
+        init=INIT_SENTINEL,
         fastq=results_path("premap_snrna", "{sample}.snrna_unmapped.fastq.gz"),
         index=STAR_INDEX_DIR
     output:
@@ -447,6 +500,7 @@ rule map_genome_star:
 
 rule deduplicate_bam:
     input:
+        init=INIT_SENTINEL,
         bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam")
     output:
         bam=results_path("dedup", "{sample}.dedup.bam")
@@ -495,6 +549,7 @@ rule deduplicate_bam:
 
 rule index_deduplicated_bam:
     input:
+        init=INIT_SENTINEL,
         bam=results_path("dedup", "{sample}.dedup.bam")
     output:
         bai=results_path("dedup", "{sample}.dedup.bam.bai")
