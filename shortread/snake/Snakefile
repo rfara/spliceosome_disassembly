@@ -1,0 +1,422 @@
+from pathlib import Path
+import shlex
+
+
+WORKFLOW_DIR = Path(workflow.basedir).resolve()
+REPO_ROOT = WORKFLOW_DIR.parents[1]
+RESULTS_DIR = WORKFLOW_DIR / "results"
+LOG_DIR = WORKFLOW_DIR / "logs"
+BENCHMARK_DIR = WORKFLOW_DIR / "benchmarks"
+ENV_YAML = WORKFLOW_DIR / "envs" / "rnaseq_pipeline.yml"
+
+configfile: str(WORKFLOW_DIR / "config.yaml")
+
+shell.executable("bash")
+
+
+def repo_path(path_string):
+    path = Path(path_string)
+    if path.is_absolute():
+        return str(path)
+    return str((REPO_ROOT / path).resolve())
+
+
+def results_path(*parts):
+    return str((RESULTS_DIR.joinpath(*parts)).resolve())
+
+
+def log_path(*parts):
+    return str((LOG_DIR.joinpath(*parts)).resolve())
+
+
+def benchmark_path(*parts):
+    return str((BENCHMARK_DIR.joinpath(*parts)).resolve())
+
+
+SAMPLES = list(config["samples"].keys())
+
+BT2_SUFFIXES = [
+    ".1.bt2",
+    ".2.bt2",
+    ".3.bt2",
+    ".4.bt2",
+    ".rev.1.bt2",
+    ".rev.2.bt2",
+]
+
+RRNA_INDEX_PREFIX = results_path("reference", "rrna", "rrna")
+SNRNA_INDEX_PREFIX = results_path("reference", "snrna", "snrna")
+STAR_INDEX_DIR = results_path("reference", "star_genome")
+
+
+def bowtie2_index_outputs(prefix):
+    return [prefix + suffix for suffix in BT2_SUFFIXES]
+
+
+def sample_fastq(wildcards):
+    return repo_path(config["samples"][wildcards.sample])
+
+
+def cutadapt_adapter_args():
+    trim_cfg = config["trim"]
+    adapters = [
+        f"G{{{trim_cfg['poly_g_min']}}}",
+        f"A{{{trim_cfg['poly_a_min']}}}",
+        *trim_cfg["illumina_3p_adapters"],
+    ]
+    return " ".join(f"-a {shlex.quote(adapter)}" for adapter in adapters)
+
+
+def bowtie2_preset(cfg):
+    parts = [cfg["preset"]]
+    extra = cfg.get("extra", "").strip()
+    if extra:
+        parts.append(extra)
+    return " ".join(parts)
+
+
+def star_genome_generate_extra():
+    star_cfg = config["star"]
+    parts = []
+    genome_sa_index_nbases = star_cfg.get("genome_sa_index_nbases")
+    if genome_sa_index_nbases is not None:
+        parts.extend(["--genomeSAindexNbases", str(genome_sa_index_nbases)])
+    extra = star_cfg.get("genome_generate_extra", "").strip()
+    if extra:
+        parts.append(extra)
+    return " ".join(parts)
+
+
+def star_align_extra():
+    extra = config["star"].get("align_extra", "").strip()
+    return extra
+
+
+TRIM_ADAPTER_ARGS = cutadapt_adapter_args()
+PREMAP_ARGS = bowtie2_preset(config["premap"])
+STAR_GENOME_GENERATE_EXTRA = star_genome_generate_extra()
+STAR_ALIGN_EXTRA = star_align_extra()
+
+
+rule all:
+    input:
+        expand(results_path("dedup", "{sample}.dedup.bam"), sample=SAMPLES),
+        expand(results_path("dedup", "{sample}.dedup.bam.bai"), sample=SAMPLES),
+
+
+rule build_rrna_index:
+    input:
+        fasta=repo_path(config["references"]["rrna_fasta"])
+    output:
+        bowtie2_index_outputs(RRNA_INDEX_PREFIX)
+    log:
+        log_path("reference", "rrna_bowtie2_build.log")
+    benchmark:
+        benchmark_path("reference", "rrna_bowtie2_build.tsv")
+    threads: config["resources"]["bowtie2_build_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        prefix=RRNA_INDEX_PREFIX
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {params.prefix})" "$(dirname {log})" "$(dirname {benchmark})"
+        bowtie2-build \
+          --threads {threads} \
+          {input.fasta} \
+          {params.prefix} \
+          > {log} 2>&1
+        """
+
+
+rule build_snrna_index:
+    input:
+        fasta=repo_path(config["references"]["snrna_fasta"])
+    output:
+        bowtie2_index_outputs(SNRNA_INDEX_PREFIX)
+    log:
+        log_path("reference", "snrna_bowtie2_build.log")
+    benchmark:
+        benchmark_path("reference", "snrna_bowtie2_build.tsv")
+    threads: config["resources"]["bowtie2_build_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        prefix=SNRNA_INDEX_PREFIX
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {params.prefix})" "$(dirname {log})" "$(dirname {benchmark})"
+        bowtie2-build \
+          --threads {threads} \
+          {input.fasta} \
+          {params.prefix} \
+          > {log} 2>&1
+        """
+
+
+rule build_star_index:
+    input:
+        fasta=repo_path(config["references"]["genome_fasta"]),
+        gtf=repo_path(config["references"]["genome_gtf"])
+    output:
+        directory(STAR_INDEX_DIR)
+    log:
+        log_path("reference", "star_genome_generate.log")
+    benchmark:
+        benchmark_path("reference", "star_genome_generate.tsv")
+    threads: config["resources"]["star_index_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        sjdb_overhang=config["star"]["sjdb_overhang"],
+        extra=STAR_GENOME_GENERATE_EXTRA
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {output} "$(dirname {log})" "$(dirname {benchmark})"
+        STAR \
+          --runMode genomeGenerate \
+          --runThreadN {threads} \
+          --genomeDir {output} \
+          --genomeFastaFiles {input.fasta} \
+          --sjdbGTFfile {input.gtf} \
+          --sjdbOverhang {params.sjdb_overhang} \
+          {params.extra} \
+          > {log} 2>&1
+        """
+
+
+rule trim_reads:
+    input:
+        sample_fastq
+    output:
+        temp(results_path("trimmed", "{sample}.trimmed.fastq.gz"))
+    log:
+        log_path("trim", "{sample}.log")
+    benchmark:
+        benchmark_path("trim", "{sample}.tsv")
+    threads: config["resources"]["trim_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        min_length=config["trim"]["min_length"],
+        times=config["trim"]["times"],
+        adapter_args=TRIM_ADAPTER_ARGS,
+        extra=config["trim"].get("extra", "")
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output})" "$(dirname {log})" "$(dirname {benchmark})"
+        cutadapt \
+          -j {threads} \
+          --minimum-length {params.min_length} \
+          --times {params.times} \
+          {params.adapter_args} \
+          {params.extra} \
+          -o {output} \
+          {input} \
+          > {log} 2>&1
+        """
+
+
+rule extract_umis:
+    input:
+        results_path("trimmed", "{sample}.trimmed.fastq.gz")
+    output:
+        extracted=results_path("umi", "{sample}.umi_extracted.fastq.gz"),
+        filtered=results_path("umi", "filtered", "{sample}.regex_mismatch.fastq.gz")
+    log:
+        log_path("umi", "{sample}.log")
+    benchmark:
+        benchmark_path("umi", "{sample}.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        extract_method=config["umi"]["extract_method"],
+        bc_pattern=config["umi"]["bc_pattern"]
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.extracted})" "$(dirname {output.filtered})" "$(dirname {log})" "$(dirname {benchmark})"
+        umi_tools extract \
+          --extract-method={params.extract_method} \
+          --bc-pattern={params.bc_pattern:q} \
+          --stdin={input} \
+          --stdout={output.extracted} \
+          --filtered-out={output.filtered} \
+          --log={log}
+        """
+
+
+rule premap_rrna:
+    input:
+        fastq=results_path("umi", "{sample}.umi_extracted.fastq.gz"),
+        index=bowtie2_index_outputs(RRNA_INDEX_PREFIX)
+    output:
+        bam=results_path("premap_rrna", "{sample}.rrna.bam"),
+        unmapped=temp(results_path("premap_rrna", "{sample}.rrna_unmapped.fastq.gz"))
+    log:
+        log_path("premap_rrna", "{sample}.log")
+    benchmark:
+        benchmark_path("premap_rrna", "{sample}.tsv")
+    threads: config["resources"]["premap_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        index_prefix=RRNA_INDEX_PREFIX,
+        args=PREMAP_ARGS
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {benchmark})"
+        bowtie2 \
+          --threads {threads} \
+          -x {params.index_prefix} \
+          -U {input.fastq} \
+          --un-gz {output.unmapped} \
+          --no-unal \
+          -k 1 \
+          {params.args} \
+          2> {log} \
+        | samtools view -@ {threads} -b - \
+        | samtools sort -@ {threads} -o {output.bam} -
+        """
+
+
+rule premap_snrna:
+    input:
+        fastq=results_path("premap_rrna", "{sample}.rrna_unmapped.fastq.gz"),
+        index=bowtie2_index_outputs(SNRNA_INDEX_PREFIX)
+    output:
+        bam=results_path("premap_snrna", "{sample}.snrna.bam"),
+        unmapped=temp(results_path("premap_snrna", "{sample}.snrna_unmapped.fastq.gz"))
+    log:
+        log_path("premap_snrna", "{sample}.log")
+    benchmark:
+        benchmark_path("premap_snrna", "{sample}.tsv")
+    threads: config["resources"]["premap_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        index_prefix=SNRNA_INDEX_PREFIX,
+        args=PREMAP_ARGS
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {benchmark})"
+        bowtie2 \
+          --threads {threads} \
+          -x {params.index_prefix} \
+          -U {input.fastq} \
+          --un-gz {output.unmapped} \
+          --no-unal \
+          -k 1 \
+          {params.args} \
+          2> {log} \
+        | samtools view -@ {threads} -b - \
+        | samtools sort -@ {threads} -o {output.bam} -
+        """
+
+
+rule map_genome_star:
+    input:
+        fastq=results_path("premap_snrna", "{sample}.snrna_unmapped.fastq.gz"),
+        index=STAR_INDEX_DIR
+    output:
+        bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
+        summary=results_path("star", "{sample}.Log.final.out"),
+        junctions=results_path("star", "{sample}.SJ.out.tab")
+    log:
+        log_path("star", "{sample}.log")
+    benchmark:
+        benchmark_path("star", "{sample}.tsv")
+    threads: config["resources"]["star_map_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        prefix=lambda wildcards: results_path("star", f"{wildcards.sample}."),
+        sort_ram=config["star"]["limit_bam_sort_ram"],
+        align_extra=STAR_ALIGN_EXTRA
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {benchmark})"
+        STAR \
+          --runThreadN {threads} \
+          --genomeDir {input.index} \
+          --readFilesIn {input.fastq} \
+          --readFilesCommand zcat \
+          --alignEndsType EndToEnd \
+          --outSAMtype BAM SortedByCoordinate \
+          --outSAMattributes NH HI AS nM MD \
+          --limitBAMsortRAM {params.sort_ram} \
+          --outFileNamePrefix {params.prefix} \
+          {params.align_extra} \
+          > {log} 2>&1
+        mv {params.prefix}Aligned.sortedByCoord.out.bam {output.bam}
+        mv {params.prefix}Log.final.out {output.summary}
+        mv {params.prefix}SJ.out.tab {output.junctions}
+        rm -f {params.prefix}Log.out {params.prefix}Log.progress.out
+        """
+
+
+rule deduplicate_bam:
+    input:
+        bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam")
+    output:
+        bam=results_path("dedup", "{sample}.dedup.bam")
+    log:
+        log_path("dedup", "{sample}.log")
+    benchmark:
+        benchmark_path("dedup", "{sample}.tsv")
+    threads: config["resources"]["dedup_sort_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        temp_dir=results_path("tmp", "umi_dedup", "{sample}"),
+        sort_memory=config["dedup"]["samtools_sort_memory"],
+        method=config["dedup"]["method"],
+        multimap_tag=config["dedup"]["multimapping_detection_method"],
+        extra=config["dedup"].get("extra", "")
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bam})" "{params.temp_dir}" "$(dirname {log})" "$(dirname {benchmark})"
+        umi_tools dedup \
+          --stdin={input.bam} \
+          --log={log} \
+          --temp-dir={params.temp_dir} \
+          --method={params.method} \
+          --multimapping-detection-method={params.multimap_tag} \
+          --spliced-is-unique \
+          --unmapped-reads=discard \
+          --no-sort-output \
+          {params.extra} \
+        | samtools sort \
+            -@ {threads} \
+            -m {params.sort_memory} \
+            -o {output.bam} \
+            -
+        """
+
+
+rule index_deduplicated_bam:
+    input:
+        bam=results_path("dedup", "{sample}.dedup.bam")
+    output:
+        bai=results_path("dedup", "{sample}.dedup.bam.bai")
+    log:
+        log_path("dedup_index", "{sample}.log")
+    benchmark:
+        benchmark_path("dedup_index", "{sample}.tsv")
+    threads: config["resources"]["samtools_index_threads"]
+    conda:
+        str(ENV_YAML)
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "$(dirname {benchmark})"
+        samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
+        """

@@ -1,0 +1,54 @@
+samples:
+  ILS_1: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373584/373584_S1_R1_001.fastq.gz
+  ILS_2: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373585/373585_S2_R1_001.fastq.gz
+  ILS_3: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373586/373586_S3_R1_001.fastq.gz
+  DIS_1: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373587/373587_S4_R1_001.fastq.gz
+  DIS_2: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373588/373588_S5_R1_001.fastq.gz
+  DIS_3: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373589/373589_S6_R1_001.fastq.gz
+
+references:
+  rrna_fasta: /groups/plaschka/rupert.faraway/reference/hs/rdna/rdna.fa
+  snrna_fasta: /groups/plaschka/rupert.faraway/reference/hs/snrna/gc44.basic.snrna.fa
+  genome_fasta: /groups/plaschka/rupert.faraway/reference/hs/fa/GRCh38.primary_assembly.genome.fa
+  genome_gtf: /groups/plaschka/rupert.faraway/reference/hs/annotation/gencode.v44.primary_assembly.basic.annotation.gtf
+
+trim:
+  min_length: 20
+  poly_g_min: 10
+  poly_a_min: 10
+  times: 3
+  illumina_3p_adapters:
+    - AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+    - AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+  extra: ""
+
+umi:
+  extract_method: regex
+  bc_pattern: "^(?P<umi_1>.{4})(?P<discard_1>CGTGAT)(?P<umi_2>.{5})"
+
+premap:
+  preset: "--very-sensitive-local"
+  extra: ""
+
+star:
+  # Set this to read_length - 1 for the raw sequencing read length.
+  sjdb_overhang: 149
+  genome_sa_index_nbases: 14
+  limit_bam_sort_ram: 24000000000
+  genome_generate_extra: ""
+  align_extra: "--twopassMode Basic"
+
+dedup:
+  method: directional
+  multimapping_detection_method: NH
+  samtools_sort_memory: 2G
+  extra: ""
+
+resources:
+  trim_threads: 8
+  bowtie2_build_threads: 8
+  premap_threads: 16
+  star_index_threads: 16
+  star_map_threads: 16
+  dedup_sort_threads: 8
+  samtools_index_threads: 4

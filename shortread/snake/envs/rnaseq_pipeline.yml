@@ -1,0 +1,14 @@
+name: spliceosome-shortread
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.11
+  - snakemake=8.30
+  - cutadapt=4.9
+  - umi_tools=1.1.5
+  - bowtie2=2.5.4
+  - star=2.7.11b
+  - samtools=1.21
+  - pigz=2.8
