@@ -156,8 +156,6 @@ WORKFLOW_DIRS = [
     results_path("trimmed", "r2"),
     results_path("umi", "r1"),
     results_path("umi", "r2"),
-    results_path("umi", "filtered", "r1"),
-    results_path("umi", "filtered", "r2"),
     results_path("umi", "ready", "r1"),
     results_path("umi", "ready", "r2"),
     results_path("premap_rrna", "r1"),
@@ -445,9 +443,7 @@ rule extract_umis:
         r2=results_path("trimmed", "r2", "{sample}.trimmed.fastq.gz")
     output:
         r1=temp(results_path("umi", "r1", "{sample}.umi_extracted.fastq.gz")),
-        r2=temp(results_path("umi", "r2", "{sample}.umi_extracted.fastq.gz")),
-        filtered_r1=results_path("umi", "filtered", "r1", "{sample}.prefix_mismatch.fastq.gz"),
-        filtered_r2=results_path("umi", "filtered", "r2", "{sample}.prefix_mismatch.fastq.gz")
+        r2=temp(results_path("umi", "r2", "{sample}.umi_extracted.fastq.gz"))
     log:
         log_path("umi", "{sample}.log")
     benchmark:
@@ -468,7 +464,7 @@ rule extract_umis:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {output.filtered_r1})" "$(dirname {output.filtered_r2})" "$(dirname {log})" "{params.benchmark_dir}"
+        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {log})" "{params.benchmark_dir}"
         umi_tools extract \
           --extract-method={params.extract_method} \
           --bc-pattern={params.bc_pattern:q} \
@@ -476,8 +472,6 @@ rule extract_umis:
           --stdout={output.r1} \
           --read2-in={input.r2} \
           --read2-out={output.r2} \
-          --filtered-out={output.filtered_r1} \
-          --filtered-out2={output.filtered_r2} \
           --log={log}
         """
 
