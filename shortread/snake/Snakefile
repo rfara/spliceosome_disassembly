@@ -699,9 +699,6 @@ rule map_genome_star:
           --outFileNamePrefix {params.prefix} \
           {params.align_extra} \
           > {log} 2>&1
-        mv {params.prefix}Aligned.sortedByCoord.out.bam {output.bam}
-        mv {params.prefix}Log.final.out {output.summary}
-        mv {params.prefix}SJ.out.tab {output.junctions}
         rm -f {params.prefix}Log.out {params.prefix}Log.progress.out
         """
 
