@@ -20,11 +20,13 @@ trim:
   illumina_3p_adapters:
     - AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
     - AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+    # This one includes an extension specific to my RT primer.
+    - CAGGACAGATCGGAAGAGCACACGTCTGA
   extra: ""
 
 umi:
   extract_method: regex
-  bc_pattern: "^(?P<umi_1>.{4})(?P<discard_1>CGTGAT)(?P<umi_2>.{5})"
+  bc_pattern: "^(?P<umi_1>.{5})(?P<discard_1>CGTGAT)(?P<umi_2>.{4})"
 
 premap:
   preset: "--very-sensitive-local"
