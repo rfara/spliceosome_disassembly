@@ -122,7 +122,7 @@ WORKFLOW_DIRS = [
     results_path("reference", "star_genome"),
     results_path("trimmed"),
     results_path("umi"),
-    results_path("umi", "filtered"),
+    # results_path("umi", "filtered"),
     results_path("umi", "ready"),
     results_path("premap_rrna"),
     results_path("premap_snrna"),
@@ -327,8 +327,7 @@ rule extract_umis:
         init=INIT_SENTINEL,
         fastq=results_path("trimmed", "{sample}.trimmed.fastq.gz")
     output:
-        extracted=results_path("umi", "{sample}.umi_extracted.fastq.gz"),
-        filtered=results_path("umi", "filtered", "{sample}.prefix_mismatch.fastq.gz")
+        extracted=results_path("umi", "{sample}.umi_extracted.fastq.gz")
     log:
         log_path("umi", "{sample}.log")
     benchmark:
@@ -349,13 +348,12 @@ rule extract_umis:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.extracted})" "$(dirname {output.filtered})" "$(dirname {log})" "{params.benchmark_dir}"
+        mkdir -p "$(dirname {output.extracted})" "$(dirname {log})" "{params.benchmark_dir}"
         umi_tools extract \
           --extract-method={params.extract_method} \
           --bc-pattern={params.bc_pattern:q} \
           --stdin={input.fastq} \
           --stdout={output.extracted} \
-          --filtered-out={output.filtered} \
           --log={log}
         """
 
