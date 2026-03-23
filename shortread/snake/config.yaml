@@ -25,7 +25,7 @@ trim:
 
 umi:
   extract_method: string
-  bc_pattern: "NNNNNNXXXXXXNNNN" # 5N + CGTGAT + 4N; string mode keeps the fixed 6mer on-read.
+  bc_pattern: "NNNNNXXXXXXNNNN" # 5N + CGTGAT + 4N; string mode keeps the fixed 6mer on-read.
   fixed_5p_sequence: CGTGAT
   fixed_5p_error_rate: 0.2
 
