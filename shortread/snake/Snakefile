@@ -123,6 +123,7 @@ WORKFLOW_DIRS = [
     results_path("trimmed"),
     results_path("umi"),
     results_path("umi", "filtered"),
+    results_path("umi", "ready"),
     results_path("premap_rrna"),
     results_path("premap_snrna"),
     results_path("star"),
@@ -327,7 +328,7 @@ rule extract_umis:
         fastq=results_path("trimmed", "{sample}.trimmed.fastq.gz")
     output:
         extracted=results_path("umi", "{sample}.umi_extracted.fastq.gz"),
-        filtered=results_path("umi", "filtered", "{sample}.regex_mismatch.fastq.gz")
+        filtered=results_path("umi", "filtered", "{sample}.prefix_mismatch.fastq.gz")
     log:
         log_path("umi", "{sample}.log")
     benchmark:
@@ -359,10 +360,49 @@ rule extract_umis:
         """
 
 
+rule trim_fixed_5p_sequence:
+    input:
+        init=INIT_SENTINEL,
+        fastq=results_path("umi", "{sample}.umi_extracted.fastq.gz")
+    output:
+        temp(results_path("umi", "ready", "{sample}.umi_ready.fastq.gz"))
+    log:
+        log_path("umi", "{sample}.fixed_5p_trim.log")
+    benchmark:
+        benchmark_path("umi", "{sample}.fixed_5p_trim.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        fixed_5p_sequence=config["umi"]["fixed_5p_sequence"],
+        error_rate=config["umi"]["fixed_5p_error_rate"],
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("umi", f"{wildcards.sample}.fixed_5p_trim.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "16G",
+            "umi_trim5p",
+            log_path("slurm", f"umi_trim5p.{wildcards.sample}.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output})" "$(dirname {log})" "{params.benchmark_dir}"
+        cutadapt \
+          -j {threads} \
+          -g ^{params.fixed_5p_sequence} \
+          --error-rate {params.error_rate} \
+          --discard-untrimmed \
+          -o {output} \
+          {input.fastq} \
+          > {log} 2>&1
+        """
+
+
 rule premap_rrna:
     input:
         init=INIT_SENTINEL,
-        fastq=results_path("umi", "{sample}.umi_extracted.fastq.gz"),
+        fastq=results_path("umi", "ready", "{sample}.umi_ready.fastq.gz"),
         index=bowtie2_index_outputs(RRNA_INDEX_PREFIX)
     output:
         bam=results_path("premap_rrna", "{sample}.rrna.bam"),

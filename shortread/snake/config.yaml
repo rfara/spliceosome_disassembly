@@ -24,8 +24,10 @@ trim:
   extra: ""
 
 umi:
-  extract_method: regex
-  bc_pattern: "^(?P<umi_1>.{5})(?P<discard_1>CGTGAT)(?P<umi_2>.{4})" # Note: my adapter sequence was misannotated - it's 5N + BC + 4N!
+  extract_method: string
+  bc_pattern: "NNNNNNXXXXXXNNNN" # 5N + CGTGAT + 4N; string mode keeps the fixed 6mer on-read.
+  fixed_5p_sequence: CGTGAT
+  fixed_5p_error_rate: 0.2
 
 premap:
   preset: "--very-sensitive-local"
