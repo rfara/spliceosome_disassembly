@@ -8,10 +8,12 @@ dependencies:
   - snakemake=8.30
   - snakemake-executor-plugin-cluster-generic
   - cutadapt=4.9
+  - fastqc=0.12.1
   - umi_tools=1.1.5
   - bowtie2=2.5.4
   - star=2.7.11b
   - samtools=1.21
+  - qualimap=2.3
   - pigz=2.8
   - git
   - gh

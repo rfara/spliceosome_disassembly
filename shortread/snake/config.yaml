@@ -13,10 +13,13 @@ references:
   genome_gtf: /groups/plaschka/rupert.faraway/reference/hs/annotation/gencode.v44.primary_assembly.basic.annotation.gtf
 
 trim:
-  min_length: 30 # There's a 15nt UMI + barcode, so this is effectively 15nt of insert sequence.
+  min_length_r1: 20
+  min_length_r2: 16
   poly_g_min: 10
   poly_a_min: 10
   times: 3
+  r2_fixed_5p_sequence: GTCCTG
+  r2_3p_adapter: NNNNATCACGNNNNNAGATCGGAAGAGCGTCGTG
   illumina_3p_adapters:
     - AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
     - AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
@@ -47,6 +50,11 @@ dedup:
   samtools_sort_memory: 8G
   extra: ""
 
+qualimap:
+  java_mem: 16G
+  slurm_mem: 24G
+  protocol: non-strand-specific
+
 slurm:
   time_limits:
     short: "08:00:00"
@@ -61,3 +69,5 @@ resources:
   star_map_threads: 16
   dedup_sort_threads: 8
   samtools_index_threads: 4
+  fastqc_threads: 2
+  bam_qc_threads: 2

@@ -48,6 +48,16 @@ RRNA_INDEX_PREFIX = results_path("reference", "rrna", "rrna")
 SNRNA_INDEX_PREFIX = results_path("reference", "snrna", "snrna")
 STAR_INDEX_DIR = results_path("reference", "star_genome")
 SLURM_TIME_LIMITS = config["slurm"]["time_limits"]
+BAM_QC_STAGES = {
+    "premap_rrna": results_path("premap_rrna", "{sample}.rrna.bam"),
+    "premap_snrna": results_path("premap_snrna", "{sample}.snrna.bam"),
+    "star": results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
+    "dedup": results_path("dedup", "{sample}.dedup.bam"),
+}
+QUALIMAP_RNASEQ_STAGES = {
+    "star": BAM_QC_STAGES["star"],
+    "dedup": BAM_QC_STAGES["dedup"],
+}
 
 
 def bowtie2_index_outputs(prefix):
@@ -56,6 +66,23 @@ def bowtie2_index_outputs(prefix):
 
 def sample_fastq(wildcards):
     return repo_path(config["samples"][wildcards.sample])
+
+
+def sample_fastq_r2(wildcards):
+    r1 = config["samples"][wildcards.sample]
+    if "_R1_" in r1:
+        return repo_path(r1.replace("_R1_", "_R2_"))
+    if "_R1." in r1:
+        return repo_path(r1.replace("_R1.", "_R2."))
+    raise ValueError(f"Could not derive R2 path from R1 path: {r1}")
+
+
+def qualimap_bam_index(wildcards):
+    if wildcards.stage == "star":
+        return results_path("star", f"{wildcards.sample}.Aligned.sortedByCoord.out.bam.bai")
+    if wildcards.stage == "dedup":
+        return results_path("dedup", f"{wildcards.sample}.dedup.bam.bai")
+    raise ValueError(f"Qualimap QC is not configured for stage: {wildcards.stage}")
 
 
 def cutadapt_adapter_args():
@@ -93,6 +120,10 @@ def star_align_extra():
     return extra
 
 
+def cutadapt_r2_adapter():
+    return config["trim"]["r2_3p_adapter"]
+
+
 def slurm_cluster_args(qos, mem, job_name, slurm_log_file, threads):
     partition, tier = qos.split("_", 1)
     time_limit = SLURM_TIME_LIMITS[tier]
@@ -112,6 +143,7 @@ def slurm_cluster_args(qos, mem, job_name, slurm_log_file, threads):
 
 
 TRIM_ADAPTER_ARGS = cutadapt_adapter_args()
+TRIM_R2_ADAPTER = cutadapt_r2_adapter()
 PREMAP_ARGS = bowtie2_preset(config["premap"])
 STAR_GENOME_GENERATE_EXTRA = star_genome_generate_extra()
 STAR_ALIGN_EXTRA = star_align_extra()
@@ -120,14 +152,30 @@ WORKFLOW_DIRS = [
     results_path("reference", "rrna"),
     results_path("reference", "snrna"),
     results_path("reference", "star_genome"),
-    results_path("trimmed"),
-    results_path("umi"),
-    # results_path("umi", "filtered"),
-    results_path("umi", "ready"),
-    results_path("premap_rrna"),
-    results_path("premap_snrna"),
+    results_path("trimmed", "r1"),
+    results_path("trimmed", "r2"),
+    results_path("umi", "r1"),
+    results_path("umi", "r2"),
+    results_path("umi", "filtered", "r1"),
+    results_path("umi", "filtered", "r2"),
+    results_path("umi", "ready", "r1"),
+    results_path("umi", "ready", "r2"),
+    results_path("premap_rrna", "r1"),
+    results_path("premap_rrna", "r2"),
+    results_path("premap_snrna", "r1"),
+    results_path("premap_snrna", "r2"),
     results_path("star"),
     results_path("dedup"),
+    results_path("qc", "fastqc", "trimmed", "r1"),
+    results_path("qc", "fastqc", "trimmed", "r2"),
+    results_path("qc", "fastqc", "umi", "r1"),
+    results_path("qc", "fastqc", "umi", "r2"),
+    results_path("qc", "bam", "premap_rrna"),
+    results_path("qc", "bam", "premap_snrna"),
+    results_path("qc", "bam", "star"),
+    results_path("qc", "bam", "dedup"),
+    results_path("qc", "qualimap", "star"),
+    results_path("qc", "qualimap", "dedup"),
     results_path("tmp", "umi_dedup"),
     log_path("reference"),
     log_path("trim"),
@@ -135,8 +183,12 @@ WORKFLOW_DIRS = [
     log_path("premap_rrna"),
     log_path("premap_snrna"),
     log_path("star"),
+    log_path("star_index"),
     log_path("dedup"),
     log_path("dedup_index"),
+    log_path("qc_fastqc"),
+    log_path("qc_bam"),
+    log_path("qc_qualimap"),
     log_path("slurm"),
     benchmark_path("reference"),
     benchmark_path("trim"),
@@ -144,8 +196,12 @@ WORKFLOW_DIRS = [
     benchmark_path("premap_rrna"),
     benchmark_path("premap_snrna"),
     benchmark_path("star"),
+    benchmark_path("star_index"),
     benchmark_path("dedup"),
     benchmark_path("dedup_index"),
+    benchmark_path("qc_fastqc"),
+    benchmark_path("qc_bam"),
+    benchmark_path("qc_qualimap"),
 ]
 
 
@@ -156,6 +212,18 @@ rule all:
     input:
         expand(results_path("dedup", "{sample}.dedup.bam"), sample=SAMPLES),
         expand(results_path("dedup", "{sample}.dedup.bam.bai"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "trimmed", "r1", "{sample}.trimmed_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "trimmed", "r1", "{sample}.trimmed_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_extracted_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_extracted_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_extracted_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_extracted_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "bam", "{stage}", "{sample}.flagstat.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
+        expand(results_path("qc", "bam", "{stage}", "{sample}.stats.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
+        expand(results_path("qc", "qualimap", "{stage}", "{sample}", "qualimapReport.html"), sample=SAMPLES, stage=QUALIMAP_RNASEQ_STAGES.keys()),
+        expand(results_path("qc", "qualimap", "{stage}", "{sample}", "rnaseq_qc_results.txt"), sample=SAMPLES, stage=QUALIMAP_RNASEQ_STAGES.keys()),
 
 
 rule initialize_workdirs:
@@ -283,9 +351,11 @@ rule build_star_index:
 rule trim_reads:
     input:
         init=INIT_SENTINEL,
-        fastq=sample_fastq
+        r1=sample_fastq,
+        r2=sample_fastq_r2
     output:
-        temp(results_path("trimmed", "{sample}.trimmed.fastq.gz"))
+        r1=temp(results_path("trimmed", "r1", "{sample}.trimmed.fastq.gz")),
+        r2=temp(results_path("trimmed", "r2", "{sample}.trimmed.fastq.gz"))
     log:
         log_path("trim", "{sample}.log")
     benchmark:
@@ -294,9 +364,12 @@ rule trim_reads:
     conda:
         str(ENV_YAML)
     params:
-        min_length=config["trim"]["min_length"],
+        min_length_r1=config["trim"]["min_length_r1"],
+        min_length_r2=config["trim"]["min_length_r2"],
         times=config["trim"]["times"],
         adapter_args=lambda wildcards: TRIM_ADAPTER_ARGS,
+        r2_fixed_5p_sequence=config["trim"]["r2_fixed_5p_sequence"],
+        r2_adapter=lambda wildcards: TRIM_R2_ADAPTER,
         extra=config["trim"].get("extra", ""),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("trim", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
@@ -309,25 +382,72 @@ rule trim_reads:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output})" "$(dirname {log})" "{params.benchmark_dir}"
+        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {log})" "{params.benchmark_dir}"
         cutadapt \
           -j {threads} \
-          --minimum-length {params.min_length} \
+          --minimum-length {params.min_length_r1}:{params.min_length_r2} \
+          --pair-filter=any \
           --times {params.times} \
           {params.adapter_args} \
+          -G ^{params.r2_fixed_5p_sequence} \
+          -A {params.r2_adapter} \
+          --poly-a \
           {params.extra} \
-          -o {output} \
-          {input.fastq} \
+          -o {output.r1} \
+          -p {output.r2} \
+          {input.r1} \
+          {input.r2} \
           > {log} 2>&1
+        """
+
+
+rule fastqc_trimmed_reads:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("trimmed", "r1", "{sample}.trimmed.fastq.gz"),
+        r2=results_path("trimmed", "r2", "{sample}.trimmed.fastq.gz")
+    output:
+        r1_html=results_path("qc", "fastqc", "trimmed", "r1", "{sample}.trimmed_fastqc.html"),
+        r1_zip=results_path("qc", "fastqc", "trimmed", "r1", "{sample}.trimmed_fastqc.zip"),
+        r2_html=results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.html"),
+        r2_zip=results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.zip")
+    log:
+        log_path("qc_fastqc", "trimmed.{sample}.log")
+    benchmark:
+        benchmark_path("qc_fastqc", "trimmed.{sample}.tsv")
+    threads: config["resources"]["fastqc_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        outdir_r1=results_path("qc", "fastqc", "trimmed", "r1"),
+        outdir_r2=results_path("qc", "fastqc", "trimmed", "r2"),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_fastqc", f"trimmed.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "fastqc_trim",
+            log_path("slurm", f"fastqc_trim.{wildcards.sample}.%A.log"),
+            config["resources"]["fastqc_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "{params.outdir_r1}" "{params.outdir_r2}" "$(dirname {log})" "{params.benchmark_dir}"
+        fastqc --threads {threads} --outdir "{params.outdir_r1}" {input.r1} > {log} 2>&1
+        fastqc --threads {threads} --outdir "{params.outdir_r2}" {input.r2} >> {log} 2>&1
         """
 
 
 rule extract_umis:
     input:
         init=INIT_SENTINEL,
-        fastq=results_path("trimmed", "{sample}.trimmed.fastq.gz")
+        r1=results_path("trimmed", "r1", "{sample}.trimmed.fastq.gz"),
+        r2=results_path("trimmed", "r2", "{sample}.trimmed.fastq.gz")
     output:
-        extracted=results_path("umi", "{sample}.umi_extracted.fastq.gz")
+        r1=temp(results_path("umi", "r1", "{sample}.umi_extracted.fastq.gz")),
+        r2=temp(results_path("umi", "r2", "{sample}.umi_extracted.fastq.gz")),
+        filtered_r1=results_path("umi", "filtered", "r1", "{sample}.prefix_mismatch.fastq.gz"),
+        filtered_r2=results_path("umi", "filtered", "r2", "{sample}.prefix_mismatch.fastq.gz")
     log:
         log_path("umi", "{sample}.log")
     benchmark:
@@ -348,22 +468,65 @@ rule extract_umis:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.extracted})" "$(dirname {log})" "{params.benchmark_dir}"
+        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {output.filtered_r1})" "$(dirname {output.filtered_r2})" "$(dirname {log})" "{params.benchmark_dir}"
         umi_tools extract \
           --extract-method={params.extract_method} \
           --bc-pattern={params.bc_pattern:q} \
-          --stdin={input.fastq} \
-          --stdout={output.extracted} \
+          --stdin={input.r1} \
+          --stdout={output.r1} \
+          --read2-in={input.r2} \
+          --read2-out={output.r2} \
+          --filtered-out={output.filtered_r1} \
+          --filtered-out2={output.filtered_r2} \
           --log={log}
+        """
+
+
+rule fastqc_umi_reads:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("umi", "r1", "{sample}.umi_extracted.fastq.gz"),
+        r2=results_path("umi", "r2", "{sample}.umi_extracted.fastq.gz")
+    output:
+        r1_html=results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_extracted_fastqc.html"),
+        r1_zip=results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_extracted_fastqc.zip"),
+        r2_html=results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_extracted_fastqc.html"),
+        r2_zip=results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_extracted_fastqc.zip")
+    log:
+        log_path("qc_fastqc", "umi.{sample}.log")
+    benchmark:
+        benchmark_path("qc_fastqc", "umi.{sample}.tsv")
+    threads: config["resources"]["fastqc_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        outdir_r1=results_path("qc", "fastqc", "umi", "r1"),
+        outdir_r2=results_path("qc", "fastqc", "umi", "r2"),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_fastqc", f"umi.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "fastqc_umi",
+            log_path("slurm", f"fastqc_umi.{wildcards.sample}.%A.log"),
+            config["resources"]["fastqc_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "{params.outdir_r1}" "{params.outdir_r2}" "$(dirname {log})" "{params.benchmark_dir}"
+        fastqc --threads {threads} --outdir "{params.outdir_r1}" {input.r1} > {log} 2>&1
+        fastqc --threads {threads} --outdir "{params.outdir_r2}" {input.r2} >> {log} 2>&1
         """
 
 
 rule trim_fixed_5p_sequence:
     input:
         init=INIT_SENTINEL,
-        fastq=results_path("umi", "{sample}.umi_extracted.fastq.gz")
+        r1=results_path("umi", "r1", "{sample}.umi_extracted.fastq.gz"),
+        r2=results_path("umi", "r2", "{sample}.umi_extracted.fastq.gz")
     output:
-        temp(results_path("umi", "ready", "{sample}.umi_ready.fastq.gz"))
+        r1=results_path("umi", "ready", "r1", "{sample}.umi_ready.fastq.gz"),
+        r2=results_path("umi", "ready", "r2", "{sample}.umi_ready.fastq.gz")
     log:
         log_path("umi", "{sample}.fixed_5p_trim.log")
     benchmark:
@@ -385,14 +548,16 @@ rule trim_fixed_5p_sequence:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output})" "$(dirname {log})" "{params.benchmark_dir}"
+        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {log})" "{params.benchmark_dir}"
         cutadapt \
           -j {threads} \
           -g ^{params.fixed_5p_sequence} \
           --error-rate {params.error_rate} \
           --discard-untrimmed \
-          -o {output} \
-          {input.fastq} \
+          -o {output.r1} \
+          -p {output.r2} \
+          {input.r1} \
+          {input.r2} \
           > {log} 2>&1
         """
 
@@ -400,11 +565,13 @@ rule trim_fixed_5p_sequence:
 rule premap_rrna:
     input:
         init=INIT_SENTINEL,
-        fastq=results_path("umi", "ready", "{sample}.umi_ready.fastq.gz"),
+        r1=results_path("umi", "ready", "r1", "{sample}.umi_ready.fastq.gz"),
+        r2=results_path("umi", "ready", "r2", "{sample}.umi_ready.fastq.gz"),
         index=bowtie2_index_outputs(RRNA_INDEX_PREFIX)
     output:
         bam=results_path("premap_rrna", "{sample}.rrna.bam"),
-        unmapped=temp(results_path("premap_rrna", "{sample}.rrna_unmapped.fastq.gz"))
+        unmapped_r1=temp(results_path("premap_rrna", "r1", "{sample}.rrna_unmapped.fastq.gz")),
+        unmapped_r2=temp(results_path("premap_rrna", "r2", "{sample}.rrna_unmapped.fastq.gz"))
     log:
         log_path("premap_rrna", "{sample}.log")
     benchmark:
@@ -415,6 +582,7 @@ rule premap_rrna:
     params:
         index_prefix=RRNA_INDEX_PREFIX,
         args=PREMAP_ARGS,
+        unmapped_prefix=lambda wildcards: results_path("premap_rrna", "r%", f"{wildcards.sample}.rrna_unmapped.fastq.gz"),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_rrna", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
@@ -430,8 +598,11 @@ rule premap_rrna:
         bowtie2 \
           --threads {threads} \
           -x {params.index_prefix} \
-          -U {input.fastq} \
-          --un-gz {output.unmapped} \
+          -1 {input.r1} \
+          -2 {input.r2} \
+          --no-mixed \
+          --no-discordant \
+          --un-conc-gz {params.unmapped_prefix} \
           --no-unal \
           -k 1 \
           {params.args} \
@@ -444,11 +615,13 @@ rule premap_rrna:
 rule premap_snrna:
     input:
         init=INIT_SENTINEL,
-        fastq=results_path("premap_rrna", "{sample}.rrna_unmapped.fastq.gz"),
+        r1=results_path("premap_rrna", "r1", "{sample}.rrna_unmapped.fastq.gz"),
+        r2=results_path("premap_rrna", "r2", "{sample}.rrna_unmapped.fastq.gz"),
         index=bowtie2_index_outputs(SNRNA_INDEX_PREFIX)
     output:
         bam=results_path("premap_snrna", "{sample}.snrna.bam"),
-        unmapped=temp(results_path("premap_snrna", "{sample}.snrna_unmapped.fastq.gz"))
+        unmapped_r1=temp(results_path("premap_snrna", "r1", "{sample}.snrna_unmapped.fastq.gz")),
+        unmapped_r2=temp(results_path("premap_snrna", "r2", "{sample}.snrna_unmapped.fastq.gz"))
     log:
         log_path("premap_snrna", "{sample}.log")
     benchmark:
@@ -459,6 +632,7 @@ rule premap_snrna:
     params:
         index_prefix=SNRNA_INDEX_PREFIX,
         args=PREMAP_ARGS,
+        unmapped_prefix=lambda wildcards: results_path("premap_snrna", "r%", f"{wildcards.sample}.snrna_unmapped.fastq.gz"),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_snrna", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
@@ -474,8 +648,11 @@ rule premap_snrna:
         bowtie2 \
           --threads {threads} \
           -x {params.index_prefix} \
-          -U {input.fastq} \
-          --un-gz {output.unmapped} \
+          -1 {input.r1} \
+          -2 {input.r2} \
+          --no-mixed \
+          --no-discordant \
+          --un-conc-gz {params.unmapped_prefix} \
           --no-unal \
           -k 1 \
           {params.args} \
@@ -488,7 +665,8 @@ rule premap_snrna:
 rule map_genome_star:
     input:
         init=INIT_SENTINEL,
-        fastq=results_path("premap_snrna", "{sample}.snrna_unmapped.fastq.gz"),
+        r1=results_path("premap_snrna", "r1", "{sample}.snrna_unmapped.fastq.gz"),
+        r2=results_path("premap_snrna", "r2", "{sample}.snrna_unmapped.fastq.gz"),
         index=STAR_INDEX_DIR
     output:
         bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
@@ -507,8 +685,8 @@ rule map_genome_star:
         align_extra=STAR_ALIGN_EXTRA,
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("star", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
-            "c_medium",
-            "32G",
+            "m_medium",
+            "96G",
             "star_map",
             log_path("slurm", f"star_map.{wildcards.sample}.%A.log"),
             config["resources"]["star_map_threads"],
@@ -520,7 +698,7 @@ rule map_genome_star:
         STAR \
           --runThreadN {threads} \
           --genomeDir {input.index} \
-          --readFilesIn {input.fastq} \
+          --readFilesIn {input.r1} {input.r2} \
           --readFilesCommand zcat \
           --alignEndsType EndToEnd \
           --outSAMtype BAM SortedByCoordinate \
@@ -572,7 +750,8 @@ rule deduplicate_bam:
           --log={log} \
           --temp-dir={params.temp_dir} \
           --method={params.method} \
-          --multimapping-detection-method={params.multimap_tag} \
+          --paired \
+              --multimapping-detection-method={params.multimap_tag} \
           --spliced-is-unique \
           --unmapped-reads=discard \
           --no-sort-output \
@@ -582,6 +761,36 @@ rule deduplicate_bam:
             -m {params.sort_memory} \
             -o {output.bam} \
             -
+        """
+
+
+rule index_star_bam:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam")
+    output:
+        bai=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam.bai")
+    log:
+        log_path("star_index", "{sample}.log")
+    benchmark:
+        benchmark_path("star_index", "{sample}.tsv")
+    threads: config["resources"]["samtools_index_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("star_index", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "star_bai",
+            log_path("slurm", f"star_bai.{wildcards.sample}.%A.log"),
+            config["resources"]["samtools_index_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "{params.benchmark_dir}"
+        samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
         """
 
 
@@ -612,4 +821,86 @@ rule index_deduplicated_bam:
         set -euo pipefail
         mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "{params.benchmark_dir}"
         samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
+        """
+
+
+rule bam_qc:
+    input:
+        init=INIT_SENTINEL,
+        bam=lambda wildcards: BAM_QC_STAGES[wildcards.stage].format(sample=wildcards.sample)
+    output:
+        flagstat=results_path("qc", "bam", "{stage}", "{sample}.flagstat.txt"),
+        stats=results_path("qc", "bam", "{stage}", "{sample}.stats.txt")
+    log:
+        log_path("qc_bam", "{stage}.{sample}.log")
+    benchmark:
+        benchmark_path("qc_bam", "{stage}.{sample}.tsv")
+    threads: config["resources"]["bam_qc_threads"]
+    wildcard_constraints:
+        stage="premap_rrna|premap_snrna|star|dedup"
+    conda:
+        str(ENV_YAML)
+    params:
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_bam", f"{wildcards.stage}.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            f"bam_qc_{wildcards.stage}",
+            log_path("slurm", f"bam_qc.{wildcards.stage}.{wildcards.sample}.%A.log"),
+            config["resources"]["bam_qc_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.flagstat})" "$(dirname {log})" "{params.benchmark_dir}"
+        samtools flagstat -@ {threads} {input.bam} > {output.flagstat}
+        samtools stats -@ {threads} {input.bam} > {output.stats}
+        """
+
+
+rule qualimap_rnaseq_qc:
+    input:
+        init=INIT_SENTINEL,
+        bam=lambda wildcards: QUALIMAP_RNASEQ_STAGES[wildcards.stage].format(sample=wildcards.sample),
+        bai=qualimap_bam_index,
+        gtf=repo_path(config["references"]["genome_gtf"])
+    output:
+        html=results_path("qc", "qualimap", "{stage}", "{sample}", "qualimapReport.html"),
+        summary=results_path("qc", "qualimap", "{stage}", "{sample}", "rnaseq_qc_results.txt")
+    log:
+        log_path("qc_qualimap", "{stage}.{sample}.log")
+    benchmark:
+        benchmark_path("qc_qualimap", "{stage}.{sample}.tsv")
+    threads: 1
+    wildcard_constraints:
+        stage="star|dedup"
+    conda:
+        str(ENV_YAML)
+    params:
+        outdir=lambda wildcards: results_path("qc", "qualimap", wildcards.stage, wildcards.sample),
+        java_mem=config["qualimap"]["java_mem"],
+        protocol=config["qualimap"]["protocol"],
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_qualimap", f"{wildcards.stage}.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "m_medium",
+            config["qualimap"]["slurm_mem"],
+            f"qualimap_{wildcards.stage}",
+            log_path("slurm", f"qualimap.{wildcards.stage}.{wildcards.sample}.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "{params.outdir}" "$(dirname {log})" "{params.benchmark_dir}"
+        unset DISPLAY
+        export JAVA_OPTS="-Djava.awt.headless=true"
+        qualimap rnaseq \
+          --java-mem-size={params.java_mem} \
+          -bam {input.bam} \
+          -gtf {input.gtf} \
+          -outdir {params.outdir} \
+          -outformat HTML \
+          -p {params.protocol} \
+          -pe \
+          > {log} 2>&1
         """

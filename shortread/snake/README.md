@@ -1,14 +1,18 @@
 # Short-read RNA-seq workflow
 
-This Snakemake workflow processes single-end RNA-seq reads through:
+This Snakemake workflow processes paired-end RNA-seq reads through:
 
-1. adapter and homopolymer trimming with `cutadapt`
-2. UMI extraction with `umi_tools extract`
-3. permissive local pre-mapping to rRNA with `bowtie2`
-4. permissive local pre-mapping to snRNA with `bowtie2`
-5. end-to-end genomic alignment with `STAR`
-6. UMI-aware deduplication with `umi_tools dedup`
-7. BAM indexing with `samtools index`
+1. paired-end trimming with `cutadapt`
+2. UMI extraction from `R1` while retaining synchronized `R2` reads with `umi_tools extract`
+3. removal of the retained fixed `CGTGAT` sequence from `R1`
+4. permissive paired pre-mapping to rRNA with `bowtie2`
+5. permissive paired pre-mapping to snRNA with `bowtie2`
+6. paired-end genomic alignment with `STAR`
+7. UMI-aware paired-end deduplication with `umi_tools dedup`
+8. `FastQC` on trimmed and UMI-extracted FASTQs
+9. `samtools flagstat` and `samtools stats` on produced BAMs
+10. `Qualimap RNA-seq QC` on indexed genome-aligned and deduplicated BAMs
+11. BAM indexing with `samtools index`
 
 The workflow files and outputs live under `shortread/snake`.
 
@@ -20,17 +24,21 @@ conda activate spliceosome-shortread
 snakemake -s shortread/snake/Snakefile --cores 16 --use-conda
 ```
 
+The workflow derives each `R2` path automatically by replacing `_R1_` with `_R2_` in the configured sample path.
+
 The main parameter you may want to adjust before the first run is `star.sjdb_overhang` in `shortread/snake/config.yaml`, which should match read length minus one.
 
 For SLURM submission with Snakemake 8, each rule exposes an `sbatch` argument string in `params.cluster`. A typical cluster invocation is:
 
 ```bash
 snakemake -s shortread/snake/Snakefile \
-  --use-conda \
   --jobs 50 \
+  --cores 200 \
   --latency-wait 60 \
   --executor cluster-generic \
   --cluster-generic-submit-cmd "sbatch {params.cluster}"
 ```
 
-The workflow currently maps short jobs to `c_short` or `m_short` and medium jobs to `c_medium` or `m_medium`, with time limits configured in `shortread/snake/config.yaml`.
+Add `--use-conda` if you want Snakemake to manage environments instead of using your already activated `spliceosome-shortread` environment.
+
+The workflow currently maps short jobs to `c_short` and medium jobs to `c_medium` or `m_medium`, with time limits configured in `shortread/snake/config.yaml`.
