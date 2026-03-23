@@ -9,7 +9,7 @@ This Snakemake workflow processes paired-end RNA-seq reads through:
 5. permissive paired pre-mapping to snRNA with `bowtie2`
 6. paired-end genomic alignment with `STAR`
 7. UMI-aware paired-end deduplication with `umi_tools dedup`
-8. `FastQC` on trimmed and UMI-extracted FASTQs
+8. `FastQC` on trimmed input FASTQs and `umi_ready` FASTQs
 9. `samtools flagstat` and `samtools stats` on produced BAMs
 10. `Qualimap RNA-seq QC` on indexed genome-aligned and deduplicated BAMs
 11. BAM indexing with `samtools index`

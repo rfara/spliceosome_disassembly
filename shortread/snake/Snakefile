@@ -158,10 +158,8 @@ WORKFLOW_DIRS = [
     results_path("umi", "r2"),
     results_path("umi", "ready", "r1"),
     results_path("umi", "ready", "r2"),
-    results_path("premap_rrna", "r1"),
-    results_path("premap_rrna", "r2"),
-    results_path("premap_snrna", "r1"),
-    results_path("premap_snrna", "r2"),
+    results_path("premap_rrna"),
+    results_path("premap_snrna"),
     results_path("star"),
     results_path("dedup"),
     results_path("qc", "fastqc", "trimmed", "r1"),
@@ -214,10 +212,10 @@ rule all:
         expand(results_path("qc", "fastqc", "trimmed", "r1", "{sample}.trimmed_fastqc.zip"), sample=SAMPLES),
         expand(results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.html"), sample=SAMPLES),
         expand(results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.zip"), sample=SAMPLES),
-        expand(results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_extracted_fastqc.html"), sample=SAMPLES),
-        expand(results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_extracted_fastqc.zip"), sample=SAMPLES),
-        expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_extracted_fastqc.html"), sample=SAMPLES),
-        expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_extracted_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_ready_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_ready_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.zip"), sample=SAMPLES),
         expand(results_path("qc", "bam", "{stage}", "{sample}.flagstat.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
         expand(results_path("qc", "bam", "{stage}", "{sample}.stats.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
         expand(results_path("qc", "qualimap", "{stage}", "{sample}", "qualimapReport.html"), sample=SAMPLES, stage=QUALIMAP_RNASEQ_STAGES.keys()),
@@ -325,7 +323,7 @@ rule build_star_index:
         benchmark_dir=str(Path(benchmark_path("reference", "star_genome_generate.tsv")).parent),
         cluster=slurm_cluster_args(
             "m_medium",
-            "256G",
+            "128G",
             "star_idx",
             log_path("slurm", "star_index.%A.log"),
             config["resources"]["star_index_threads"],
@@ -479,13 +477,13 @@ rule extract_umis:
 rule fastqc_umi_reads:
     input:
         init=INIT_SENTINEL,
-        r1=results_path("umi", "r1", "{sample}.umi_extracted.fastq.gz"),
-        r2=results_path("umi", "r2", "{sample}.umi_extracted.fastq.gz")
+        r1=results_path("umi", "ready", "r1", "{sample}.umi_ready.fastq.gz"),
+        r2=results_path("umi", "ready", "r2", "{sample}.umi_ready.fastq.gz")
     output:
-        r1_html=results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_extracted_fastqc.html"),
-        r1_zip=results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_extracted_fastqc.zip"),
-        r2_html=results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_extracted_fastqc.html"),
-        r2_zip=results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_extracted_fastqc.zip")
+        r1_html=results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_ready_fastqc.html"),
+        r1_zip=results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_ready_fastqc.zip"),
+        r2_html=results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.html"),
+        r2_zip=results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.zip")
     log:
         log_path("qc_fastqc", "umi.{sample}.log")
     benchmark:
@@ -564,8 +562,8 @@ rule premap_rrna:
         index=bowtie2_index_outputs(RRNA_INDEX_PREFIX)
     output:
         bam=results_path("premap_rrna", "{sample}.rrna.bam"),
-        unmapped_r1=temp(results_path("premap_rrna", "r1", "{sample}.rrna_unmapped.fastq.gz")),
-        unmapped_r2=temp(results_path("premap_rrna", "r2", "{sample}.rrna_unmapped.fastq.gz"))
+        unmapped_r1=temp(results_path("premap_rrna", "{sample}.rrna_unmapped.1.fastq.gz")),
+        unmapped_r2=temp(results_path("premap_rrna", "{sample}.rrna_unmapped.2.fastq.gz"))
     log:
         log_path("premap_rrna", "{sample}.log")
     benchmark:
@@ -576,7 +574,7 @@ rule premap_rrna:
     params:
         index_prefix=RRNA_INDEX_PREFIX,
         args=PREMAP_ARGS,
-        unmapped_prefix=lambda wildcards: results_path("premap_rrna", "r%", f"{wildcards.sample}.rrna_unmapped.fastq.gz"),
+        unmapped_prefix=lambda wildcards: results_path("premap_rrna", f"{wildcards.sample}.rrna_unmapped.%.fastq.gz"),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_rrna", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
@@ -609,13 +607,13 @@ rule premap_rrna:
 rule premap_snrna:
     input:
         init=INIT_SENTINEL,
-        r1=results_path("premap_rrna", "r1", "{sample}.rrna_unmapped.fastq.gz"),
-        r2=results_path("premap_rrna", "r2", "{sample}.rrna_unmapped.fastq.gz"),
+        r1=results_path("premap_rrna", "{sample}.rrna_unmapped.1.fastq.gz"),
+        r2=results_path("premap_rrna", "{sample}.rrna_unmapped.2.fastq.gz"),
         index=bowtie2_index_outputs(SNRNA_INDEX_PREFIX)
     output:
         bam=results_path("premap_snrna", "{sample}.snrna.bam"),
-        unmapped_r1=temp(results_path("premap_snrna", "r1", "{sample}.snrna_unmapped.fastq.gz")),
-        unmapped_r2=temp(results_path("premap_snrna", "r2", "{sample}.snrna_unmapped.fastq.gz"))
+        unmapped_r1=temp(results_path("premap_snrna", "{sample}.snrna_unmapped.1.fastq.gz")),
+        unmapped_r2=temp(results_path("premap_snrna", "{sample}.snrna_unmapped.2.fastq.gz"))
     log:
         log_path("premap_snrna", "{sample}.log")
     benchmark:
@@ -626,7 +624,7 @@ rule premap_snrna:
     params:
         index_prefix=SNRNA_INDEX_PREFIX,
         args=PREMAP_ARGS,
-        unmapped_prefix=lambda wildcards: results_path("premap_snrna", "r%", f"{wildcards.sample}.snrna_unmapped.fastq.gz"),
+        unmapped_prefix=lambda wildcards: results_path("premap_snrna", f"{wildcards.sample}.snrna_unmapped.%.fastq.gz"),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_snrna", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
@@ -659,8 +657,8 @@ rule premap_snrna:
 rule map_genome_star:
     input:
         init=INIT_SENTINEL,
-        r1=results_path("premap_snrna", "r1", "{sample}.snrna_unmapped.fastq.gz"),
-        r2=results_path("premap_snrna", "r2", "{sample}.snrna_unmapped.fastq.gz"),
+        r1=results_path("premap_snrna", "{sample}.snrna_unmapped.1.fastq.gz"),
+        r2=results_path("premap_snrna", "{sample}.snrna_unmapped.2.fastq.gz"),
         index=STAR_INDEX_DIR
     output:
         bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
