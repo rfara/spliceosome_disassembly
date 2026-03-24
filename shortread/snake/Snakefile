@@ -801,6 +801,12 @@ rule fastqc_star_unmapped_reads:
     params:
         outdir_r1=results_path("qc", "fastqc", "star_unmapped", "r1"),
         outdir_r2=results_path("qc", "fastqc", "star_unmapped", "r2"),
+        alias_r1=lambda wildcards: results_path(
+            "qc", "fastqc", "star_unmapped", "r1", f"{wildcards.sample}.star_unmapped.fastq"
+        ),
+        alias_r2=lambda wildcards: results_path(
+            "qc", "fastqc", "star_unmapped", "r2", f"{wildcards.sample}.star_unmapped.fastq"
+        ),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_fastqc", f"star_unmapped.{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_short",
@@ -813,8 +819,10 @@ rule fastqc_star_unmapped_reads:
         r"""
         set -euo pipefail
         mkdir -p "{params.outdir_r1}" "{params.outdir_r2}" "$(dirname {log})" "{params.benchmark_dir}"
-        fastqc --threads {threads} --outdir "{params.outdir_r1}" {input.r1} > {log} 2>&1
-        fastqc --threads {threads} --outdir "{params.outdir_r2}" {input.r2} >> {log} 2>&1
+        ln -sf "{input.r1}" "{params.alias_r1}"
+        ln -sf "{input.r2}" "{params.alias_r2}"
+        fastqc --threads {threads} --outdir "{params.outdir_r1}" "{params.alias_r1}" > {log} 2>&1
+        fastqc --threads {threads} --outdir "{params.outdir_r2}" "{params.alias_r2}" >> {log} 2>&1
         """
 
 
