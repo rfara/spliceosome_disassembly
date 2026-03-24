@@ -8,6 +8,7 @@ RESULTS_DIR = WORKFLOW_DIR / "results"
 LOG_DIR = WORKFLOW_DIR / "logs"
 BENCHMARK_DIR = WORKFLOW_DIR / "benchmarks"
 ENV_YAML = WORKFLOW_DIR / "envs" / "rnaseq_pipeline.yml"
+SCRIPTS_DIR = WORKFLOW_DIR / "scripts"
 
 configfile: str(WORKFLOW_DIR / "config.yaml")
 
@@ -172,6 +173,7 @@ WORKFLOW_DIRS = [
     results_path("qc", "bam", "premap_snrna"),
     results_path("qc", "bam", "star"),
     results_path("qc", "bam", "dedup"),
+    results_path("qc", "rna_content"),
     results_path("qc", "star_unmapped"),
     results_path("qc", "snrna_counts"),
     results_path("qc", "qualimap", "star"),
@@ -188,6 +190,7 @@ WORKFLOW_DIRS = [
     log_path("dedup_index"),
     log_path("qc_fastqc"),
     log_path("qc_bam"),
+    log_path("qc_rna_content"),
     log_path("qc_snrna_counts"),
     log_path("qc_qualimap"),
     log_path("slurm"),
@@ -202,6 +205,7 @@ WORKFLOW_DIRS = [
     benchmark_path("dedup_index"),
     benchmark_path("qc_fastqc"),
     benchmark_path("qc_bam"),
+    benchmark_path("qc_rna_content"),
     benchmark_path("qc_snrna_counts"),
     benchmark_path("qc_qualimap"),
 ]
@@ -226,6 +230,7 @@ rule all:
         expand(results_path("qc", "fastqc", "star_unmapped", "r1", "{sample}.star_unmapped_fastqc.zip"), sample=SAMPLES),
         expand(results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.html"), sample=SAMPLES),
         expand(results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "rna_content", "{sample}.rna_content.tsv"), sample=SAMPLES),
         expand(results_path("qc", "star_unmapped", "{sample}.summary.tsv"), sample=SAMPLES),
         expand(results_path("qc", "bam", "{stage}", "{sample}.flagstat.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
         expand(results_path("qc", "bam", "{stage}", "{sample}.stats.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
@@ -905,6 +910,51 @@ PY
         """
 
 
+rule classify_rna_content:
+    input:
+        init=INIT_SENTINEL,
+        umi_ready_r1=results_path("umi", "ready", "r1", "{sample}.umi_ready.fastq.gz"),
+        star_input_r1=results_path("premap_snrna", "{sample}.snrna_unmapped.1.fastq.gz"),
+        rrna_bam=results_path("premap_rrna", "{sample}.rrna.bam"),
+        snrna_bam=results_path("premap_snrna", "{sample}.snrna.bam"),
+        star_bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
+        gtf=repo_path(config["references"]["genome_gtf"])
+    output:
+        tsv=results_path("qc", "rna_content", "{sample}.rna_content.tsv")
+    log:
+        log_path("qc_rna_content", "{sample}.log")
+    benchmark:
+        benchmark_path("qc_rna_content", "{sample}.tsv")
+    threads: config["resources"]["rna_content_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "classify_rna_content.py").resolve()),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_rna_content", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "m_medium",
+            "24G",
+            "rna_content",
+            log_path("slurm", f"rna_content.{wildcards.sample}.%A.log"),
+            config["resources"]["rna_content_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.tsv})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --umi-ready-r1 {input.umi_ready_r1} \
+          --star-input-r1 {input.star_input_r1} \
+          --rrna-bam {input.rrna_bam} \
+          --snrna-bam {input.snrna_bam} \
+          --star-bam {input.star_bam} \
+          --gtf {input.gtf} \
+          --threads {threads} \
+          --output {output.tsv} \
+          > {log} 2>&1
+        """
+
+
 rule deduplicate_bam:
     input:
         init=INIT_SENTINEL,
@@ -1088,18 +1138,18 @@ import sys
 
 idxstats_path, fragments_path, output_path = sys.argv[1:4]
 
-counts = {}
+counts = {{}}
 order = []
 with open(idxstats_path) as handle:
     for line in handle:
         ref, length, mapped, unmapped = line.rstrip().split("\t")
         if ref == "*":
             continue
-        counts[ref] = {
+        counts[ref] = {{
             "length": int(length),
             "read_count": int(mapped),
             "fragment_count": 0,
-        }
+        }}
         order.append(ref)
 
 with open(fragments_path) as handle:
@@ -1116,7 +1166,7 @@ with open(output_path, "w") as handle:
     for ref in order:
         entry = counts[ref]
         handle.write(
-            f"{ref}\t{entry['length']}\t{entry['read_count']}\t{entry['fragment_count']}\n"
+            f"{{ref}}\t{{entry['length']}}\t{{entry['read_count']}}\t{{entry['fragment_count']}}\n"
         )
 PY
         """

@@ -71,4 +71,5 @@ resources:
   samtools_index_threads: 4
   fastqc_threads: 2
   bam_qc_threads: 2
+  rna_content_threads: 4
   snrna_count_threads: 2

@@ -14,6 +14,8 @@ dependencies:
   - bowtie2=2.5.4
   - star=2.7.11b
   - samtools=1.21
+  - pysam=0.22.1
+  - intervaltree=3.1.0
   - qualimap=2.3
   - pigz=2.8
   - git

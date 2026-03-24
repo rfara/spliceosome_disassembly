@@ -12,9 +12,10 @@ This Snakemake workflow processes paired-end RNA-seq reads through:
 8. `FastQC` on trimmed input FASTQs and `umi_ready` FASTQs
 9. `samtools flagstat` and `samtools stats` on produced BAMs
 10. a per-reference snRNA pre-map count table with mapped read and fragment counts
-11. `Qualimap RNA-seq QC` on indexed genome-aligned and deduplicated BAMs
-12. BAM indexing with `samtools index`
-13. STAR-unmapped read diagnostics, including `FastQC` and a summary table
+11. a per-sample RNA-content table combining `rRNA` pre-map, `snRNA` pre-map, and undeduplicated genomic reads
+12. `Qualimap RNA-seq QC` on indexed genome-aligned and deduplicated BAMs
+13. BAM indexing with `samtools index`
+14. STAR-unmapped read diagnostics, including `FastQC` and a summary table
 
 The workflow files and outputs live under `shortread/snake`.
 
@@ -46,6 +47,22 @@ Add `--use-conda` if you want Snakemake to manage environments instead of using 
 The workflow currently maps short jobs to `c_short` and medium jobs to `c_medium` or `m_medium`, with time limits configured in `shortread/snake/config.yaml`.
 
 The snRNA count table is written to `shortread/snake/results/qc/snrna_counts/{sample}.snrna_counts.tsv`. It reports one row per snRNA reference sequence, with both mapped read-segment counts and estimated fragment counts from primary `read1` alignments.
+
+The RNA-content table is written to `shortread/snake/results/qc/rna_content/{sample}.rna_content.tsv`. It counts read pairs with this precedence:
+
+1. `rRNA` from the rRNA pre-map
+2. `snRNA` from the snRNA pre-map or genomic annotation
+3. `mitochondrial`
+4. small ncRNA subclasses (`snoRNA`, `scaRNA`, `miRNA`, `tRNA`, `ribozyme`, `vaultRNA`, `misc_RNA`)
+5. `lncRNA`
+6. `protein_coding_intron`
+7. `protein_coding_exon`
+8. `pseudogene`
+9. `other_annotated_genic`
+10. `intergenic`
+11. `ambiguous`
+
+This uses the undeduplicated STAR BAM, counts fragments rather than alignment records, ignores strand, and lets intronic small ncRNAs win over host-gene intron annotation.
 
 To help diagnose STAR `too short` failures, the workflow also keeps STAR `Unmapped.out.mate1/2` files and writes:
 
