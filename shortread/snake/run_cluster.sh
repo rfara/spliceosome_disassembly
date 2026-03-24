@@ -45,7 +45,7 @@ printf -v wrap_q "%q" "${wrap_script}"
 
 sbatch \
   --job-name "${controller_job_name}" \
-  --partition "${controller_partition}" \
+  --qos "${controller_partition}" \
   --cpus-per-task "${controller_cpus}" \
   --mem "${controller_mem}" \
   --time "${controller_time}" \
