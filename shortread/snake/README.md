@@ -11,8 +11,10 @@ This Snakemake workflow processes paired-end RNA-seq reads through:
 7. UMI-aware paired-end deduplication with `umi_tools dedup`
 8. `FastQC` on trimmed input FASTQs and `umi_ready` FASTQs
 9. `samtools flagstat` and `samtools stats` on produced BAMs
-10. `Qualimap RNA-seq QC` on indexed genome-aligned and deduplicated BAMs
-11. BAM indexing with `samtools index`
+10. a per-reference snRNA pre-map count table with mapped read and fragment counts
+11. `Qualimap RNA-seq QC` on indexed genome-aligned and deduplicated BAMs
+12. BAM indexing with `samtools index`
+13. STAR-unmapped read diagnostics, including `FastQC` and a summary table
 
 The workflow files and outputs live under `shortread/snake`.
 
@@ -42,3 +44,12 @@ snakemake -s shortread/snake/Snakefile \
 Add `--use-conda` if you want Snakemake to manage environments instead of using your already activated `spliceosome-shortread` environment.
 
 The workflow currently maps short jobs to `c_short` and medium jobs to `c_medium` or `m_medium`, with time limits configured in `shortread/snake/config.yaml`.
+
+The snRNA count table is written to `shortread/snake/results/qc/snrna_counts/{sample}.snrna_counts.tsv`. It reports one row per snRNA reference sequence, with both mapped read-segment counts and estimated fragment counts from primary `read1` alignments.
+
+To help diagnose STAR `too short` failures, the workflow also keeps STAR `Unmapped.out.mate1/2` files and writes:
+
+- `shortread/snake/results/qc/fastqc/star_unmapped/...`
+- `shortread/snake/results/qc/star_unmapped/{sample}.summary.tsv`
+
+The summary table reports per-mate length quantiles plus the most common 12 nt prefixes and suffixes, which is usually enough to spot short inserts, residual adapters, or repetitive terminal sequence.

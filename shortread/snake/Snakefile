@@ -166,10 +166,14 @@ WORKFLOW_DIRS = [
     results_path("qc", "fastqc", "trimmed", "r2"),
     results_path("qc", "fastqc", "umi", "r1"),
     results_path("qc", "fastqc", "umi", "r2"),
+    results_path("qc", "fastqc", "star_unmapped", "r1"),
+    results_path("qc", "fastqc", "star_unmapped", "r2"),
     results_path("qc", "bam", "premap_rrna"),
     results_path("qc", "bam", "premap_snrna"),
     results_path("qc", "bam", "star"),
     results_path("qc", "bam", "dedup"),
+    results_path("qc", "star_unmapped"),
+    results_path("qc", "snrna_counts"),
     results_path("qc", "qualimap", "star"),
     results_path("qc", "qualimap", "dedup"),
     results_path("tmp", "umi_dedup"),
@@ -184,6 +188,7 @@ WORKFLOW_DIRS = [
     log_path("dedup_index"),
     log_path("qc_fastqc"),
     log_path("qc_bam"),
+    log_path("qc_snrna_counts"),
     log_path("qc_qualimap"),
     log_path("slurm"),
     benchmark_path("reference"),
@@ -197,6 +202,7 @@ WORKFLOW_DIRS = [
     benchmark_path("dedup_index"),
     benchmark_path("qc_fastqc"),
     benchmark_path("qc_bam"),
+    benchmark_path("qc_snrna_counts"),
     benchmark_path("qc_qualimap"),
 ]
 
@@ -216,8 +222,14 @@ rule all:
         expand(results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_ready_fastqc.zip"), sample=SAMPLES),
         expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.html"), sample=SAMPLES),
         expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "star_unmapped", "r1", "{sample}.star_unmapped_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "star_unmapped", "r1", "{sample}.star_unmapped_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "star_unmapped", "{sample}.summary.tsv"), sample=SAMPLES),
         expand(results_path("qc", "bam", "{stage}", "{sample}.flagstat.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
         expand(results_path("qc", "bam", "{stage}", "{sample}.stats.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
+        expand(results_path("qc", "snrna_counts", "{sample}.snrna_counts.tsv"), sample=SAMPLES),
         expand(results_path("qc", "qualimap", "{stage}", "{sample}", "qualimapReport.html"), sample=SAMPLES, stage=QUALIMAP_RNASEQ_STAGES.keys()),
         expand(results_path("qc", "qualimap", "{stage}", "{sample}", "rnaseq_qc_results.txt"), sample=SAMPLES, stage=QUALIMAP_RNASEQ_STAGES.keys()),
 
@@ -663,7 +675,9 @@ rule map_genome_star:
     output:
         bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
         summary=results_path("star", "{sample}.Log.final.out"),
-        junctions=results_path("star", "{sample}.SJ.out.tab")
+        junctions=results_path("star", "{sample}.SJ.out.tab"),
+        unmapped_r1=results_path("star", "{sample}.Unmapped.out.mate1"),
+        unmapped_r2=results_path("star", "{sample}.Unmapped.out.mate2")
     log:
         log_path("star", "{sample}.log")
     benchmark:
@@ -693,6 +707,7 @@ rule map_genome_star:
           --readFilesIn {input.r1} {input.r2} \
           --readFilesCommand zcat \
           --alignEndsType EndToEnd \
+          --outReadsUnmapped Fastx \
           --outSAMtype BAM SortedByCoordinate \
           --outSAMattributes NH HI AS nM MD \
           --limitBAMsortRAM {params.sort_ram} \
@@ -700,6 +715,193 @@ rule map_genome_star:
           {params.align_extra} \
           > {log} 2>&1
         rm -f {params.prefix}Log.out {params.prefix}Log.progress.out
+        """
+
+
+rule fastqc_star_unmapped_reads:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("star", "{sample}.Unmapped.out.mate1"),
+        r2=results_path("star", "{sample}.Unmapped.out.mate2")
+    output:
+        r1_html=results_path("qc", "fastqc", "star_unmapped", "r1", "{sample}.star_unmapped_fastqc.html"),
+        r1_zip=results_path("qc", "fastqc", "star_unmapped", "r1", "{sample}.star_unmapped_fastqc.zip"),
+        r2_html=results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.html"),
+        r2_zip=results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.zip")
+    log:
+        log_path("qc_fastqc", "star_unmapped.{sample}.log")
+    benchmark:
+        benchmark_path("qc_fastqc", "star_unmapped.{sample}.tsv")
+    threads: config["resources"]["fastqc_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        outdir_r1=results_path("qc", "fastqc", "star_unmapped", "r1"),
+        outdir_r2=results_path("qc", "fastqc", "star_unmapped", "r2"),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_fastqc", f"star_unmapped.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "fastqc_star_um",
+            log_path("slurm", f"fastqc_star_unmapped.{wildcards.sample}.%A.log"),
+            config["resources"]["fastqc_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "{params.outdir_r1}" "{params.outdir_r2}" "$(dirname {log})" "{params.benchmark_dir}"
+        fastqc --threads {threads} --outdir "{params.outdir_r1}" {input.r1} > {log} 2>&1
+        fastqc --threads {threads} --outdir "{params.outdir_r2}" {input.r2} >> {log} 2>&1
+        """
+
+
+rule summarize_star_unmapped_reads:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("star", "{sample}.Unmapped.out.mate1"),
+        r2=results_path("star", "{sample}.Unmapped.out.mate2")
+    output:
+        summary=results_path("qc", "star_unmapped", "{sample}.summary.tsv")
+    log:
+        log_path("qc_bam", "star_unmapped.{sample}.log")
+    benchmark:
+        benchmark_path("qc_bam", "star_unmapped.{sample}.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_bam", f"star_unmapped.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "star_um_sum",
+            log_path("slurm", f"star_unmapped_summary.{wildcards.sample}.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python - "{input.r1}" "{input.r2}" "{output.summary}" > {log} 2>&1 <<'PY'
+import collections
+import statistics
+import sys
+
+
+def summarize_fastq(path, mate_label):
+    length_counts = collections.Counter()
+    prefix_counts = collections.Counter()
+    suffix_counts = collections.Counter()
+    total_reads = 0
+    total_bases = 0
+    reads_le_20 = 0
+    reads_le_30 = 0
+    reads_le_40 = 0
+
+    with open(path) as handle:
+        while True:
+            header = handle.readline()
+            if not header:
+                break
+            seq = handle.readline().rstrip("\n")
+            handle.readline()
+            handle.readline()
+            read_len = len(seq)
+            total_reads += 1
+            total_bases += read_len
+            length_counts[read_len] += 1
+            reads_le_20 += int(read_len <= 20)
+            reads_le_30 += int(read_len <= 30)
+            reads_le_40 += int(read_len <= 40)
+            prefix_counts[seq[:12]] += 1
+            suffix_counts[seq[-12:]] += 1
+
+    if total_reads == 0:
+        return {
+            "mate": mate_label,
+            "total_reads": 0,
+            "mean_length": 0,
+            "min_length": 0,
+            "p10_length": 0,
+            "p25_length": 0,
+            "median_length": 0,
+            "p75_length": 0,
+            "p90_length": 0,
+            "max_length": 0,
+            "reads_le_20": 0,
+            "reads_le_30": 0,
+            "reads_le_40": 0,
+            "top_prefix_12": "",
+            "top_prefix_12_count": 0,
+            "top_suffix_12": "",
+            "top_suffix_12_count": 0,
+        }
+
+    ordered_lengths = sorted(length_counts.items())
+
+    def quantile(target):
+        cutoff = total_reads * target
+        seen = 0
+        for read_len, count in ordered_lengths:
+            seen += count
+            if seen >= cutoff:
+                return read_len
+        return ordered_lengths[-1][0]
+
+    top_prefix, top_prefix_count = prefix_counts.most_common(1)[0]
+    top_suffix, top_suffix_count = suffix_counts.most_common(1)[0]
+
+    return {
+        "mate": mate_label,
+        "total_reads": total_reads,
+        "mean_length": round(total_bases / total_reads, 2),
+        "min_length": ordered_lengths[0][0],
+        "p10_length": quantile(0.10),
+        "p25_length": quantile(0.25),
+        "median_length": quantile(0.50),
+        "p75_length": quantile(0.75),
+        "p90_length": quantile(0.90),
+        "max_length": ordered_lengths[-1][0],
+        "reads_le_20": reads_le_20,
+        "reads_le_30": reads_le_30,
+        "reads_le_40": reads_le_40,
+        "top_prefix_12": top_prefix,
+        "top_prefix_12_count": top_prefix_count,
+        "top_suffix_12": top_suffix,
+        "top_suffix_12_count": top_suffix_count,
+    }
+
+
+rows = [
+    summarize_fastq(sys.argv[1], "R1"),
+    summarize_fastq(sys.argv[2], "R2"),
+]
+
+fields = [
+    "mate",
+    "total_reads",
+    "mean_length",
+    "min_length",
+    "p10_length",
+    "p25_length",
+    "median_length",
+    "p75_length",
+    "p90_length",
+    "max_length",
+    "reads_le_20",
+    "reads_le_30",
+    "reads_le_40",
+    "top_prefix_12",
+    "top_prefix_12_count",
+    "top_suffix_12",
+    "top_suffix_12_count",
+]
+
+with open(sys.argv[3], "w") as handle:
+    handle.write("\t".join(fields) + "\n")
+    for row in rows:
+        handle.write("\t".join(str(row[field]) for field in fields) + "\n")
+PY
         """
 
 
@@ -844,6 +1046,79 @@ rule bam_qc:
         mkdir -p "$(dirname {output.flagstat})" "$(dirname {log})" "{params.benchmark_dir}"
         samtools flagstat -@ {threads} {input.bam} > {output.flagstat}
         samtools stats -@ {threads} {input.bam} > {output.stats}
+        """
+
+
+rule count_snrna_premap_reads:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("premap_snrna", "{sample}.snrna.bam")
+    output:
+        counts=results_path("qc", "snrna_counts", "{sample}.snrna_counts.tsv")
+    log:
+        log_path("qc_snrna_counts", "{sample}.log")
+    benchmark:
+        benchmark_path("qc_snrna_counts", "{sample}.tsv")
+    threads: config["resources"]["snrna_count_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_snrna_counts", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "snrna_count",
+            log_path("slurm", f"snrna_count.{wildcards.sample}.%A.log"),
+            config["resources"]["snrna_count_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.counts})" "$(dirname {log})" "{params.benchmark_dir}"
+        idxstats_file="$(mktemp)"
+        fragments_file="$(mktemp)"
+        trap 'rm -f "$idxstats_file" "$fragments_file"' EXIT
+        samtools idxstats {input.bam} > "$idxstats_file"
+        samtools view -@ {threads} -f 64 -F 2308 {input.bam} \
+          | cut -f 3 \
+          | sort \
+          | uniq -c > "$fragments_file"
+        python - "$idxstats_file" "$fragments_file" "{output.counts}" > {log} 2>&1 <<'PY'
+import sys
+
+idxstats_path, fragments_path, output_path = sys.argv[1:4]
+
+counts = {}
+order = []
+with open(idxstats_path) as handle:
+    for line in handle:
+        ref, length, mapped, unmapped = line.rstrip().split("\t")
+        if ref == "*":
+            continue
+        counts[ref] = {
+            "length": int(length),
+            "read_count": int(mapped),
+            "fragment_count": 0,
+        }
+        order.append(ref)
+
+with open(fragments_path) as handle:
+    for line in handle:
+        line = line.strip()
+        if not line:
+            continue
+        count, ref = line.split(None, 1)
+        if ref in counts:
+            counts[ref]["fragment_count"] = int(count)
+
+with open(output_path, "w") as handle:
+    handle.write("reference\tlength\tread_count\tfragment_count\n")
+    for ref in order:
+        entry = counts[ref]
+        handle.write(
+            f"{ref}\t{entry['length']}\t{entry['read_count']}\t{entry['fragment_count']}\n"
+        )
+PY
         """
 
 
