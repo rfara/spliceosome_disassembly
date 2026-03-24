@@ -39,12 +39,16 @@ snakemake -s shortread/snake/Snakefile \
   --cores 200 \
   --latency-wait 60 \
   --executor cluster-generic \
-  --cluster-generic-submit-cmd "sbatch {params.cluster}"
+  --cluster-generic-submit-cmd "sbatch {params.cluster}" \
+  --rerun-incomplete \
+  --rerun-triggers mtime input params # For now! Can remove in the end
 ```
 
 Add `--use-conda` if you want Snakemake to manage environments instead of using your already activated `spliceosome-shortread` environment.
 
 The workflow currently maps short jobs to `c_short` and medium jobs to `c_medium` or `m_medium`, with time limits configured in `shortread/snake/config.yaml`.
+
+The contaminant pre-maps now discard a pair if either mate aligns to the pre-map reference. Only pairs where both mates remain unmapped are passed forward to the next stage.
 
 The snRNA count table is written to `shortread/snake/results/qc/snrna_counts/{sample}.snrna_counts.tsv`. It reports one row per snRNA reference sequence, with both mapped read-segment counts and estimated fragment counts from primary `read1` alignments.
 

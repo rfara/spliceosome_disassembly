@@ -178,6 +178,7 @@ WORKFLOW_DIRS = [
     results_path("qc", "snrna_counts"),
     results_path("qc", "qualimap", "star"),
     results_path("qc", "qualimap", "dedup"),
+    results_path("tmp", "premap"),
     results_path("tmp", "umi_dedup"),
     log_path("reference"),
     log_path("trim"),
@@ -591,7 +592,7 @@ rule premap_rrna:
     params:
         index_prefix=RRNA_INDEX_PREFIX,
         args=PREMAP_ARGS,
-        unmapped_prefix=lambda wildcards: results_path("premap_rrna", f"{wildcards.sample}.rrna_unmapped.%.fastq.gz"),
+        temp_bam=lambda wildcards: results_path("tmp", "premap", f"{wildcards.sample}.rrna_premap.raw.bam"),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_rrna", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
@@ -603,21 +604,28 @@ rule premap_rrna:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "{params.benchmark_dir}"
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {params.temp_bam})" "{params.benchmark_dir}"
         bowtie2 \
           --threads {threads} \
           -x {params.index_prefix} \
           -1 {input.r1} \
           -2 {input.r2} \
-          --no-mixed \
           --no-discordant \
-          --un-conc-gz {params.unmapped_prefix} \
-          --no-unal \
           -k 1 \
           {params.args} \
           2> {log} \
-        | samtools view -@ {threads} -b - \
+        | samtools view -@ {threads} -u - > {params.temp_bam}
+        samtools view -@ {threads} -u -F 12 {params.temp_bam} \
         | samtools sort -@ {threads} -o {output.bam} -
+        samtools view -@ {threads} -u -f 12 {params.temp_bam} \
+        | samtools collate -@ {threads} -u -O - \
+        | samtools fastq \
+            -1 >(gzip -c > {output.unmapped_r1}) \
+            -2 >(gzip -c > {output.unmapped_r2}) \
+            -0 /dev/null \
+            -s /dev/null \
+            -n -
+        rm -f {params.temp_bam}
         """
 
 
@@ -641,7 +649,7 @@ rule premap_snrna:
     params:
         index_prefix=SNRNA_INDEX_PREFIX,
         args=PREMAP_ARGS,
-        unmapped_prefix=lambda wildcards: results_path("premap_snrna", f"{wildcards.sample}.snrna_unmapped.%.fastq.gz"),
+        temp_bam=lambda wildcards: results_path("tmp", "premap", f"{wildcards.sample}.snrna_premap.raw.bam"),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_snrna", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
@@ -653,21 +661,28 @@ rule premap_snrna:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "{params.benchmark_dir}"
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {params.temp_bam})" "{params.benchmark_dir}"
         bowtie2 \
           --threads {threads} \
           -x {params.index_prefix} \
           -1 {input.r1} \
           -2 {input.r2} \
-          --no-mixed \
           --no-discordant \
-          --un-conc-gz {params.unmapped_prefix} \
-          --no-unal \
           -k 1 \
           {params.args} \
           2> {log} \
-        | samtools view -@ {threads} -b - \
+        | samtools view -@ {threads} -u - > {params.temp_bam}
+        samtools view -@ {threads} -u -F 12 {params.temp_bam} \
         | samtools sort -@ {threads} -o {output.bam} -
+        samtools view -@ {threads} -u -f 12 {params.temp_bam} \
+        | samtools collate -@ {threads} -u -O - \
+        | samtools fastq \
+            -1 >(gzip -c > {output.unmapped_r1}) \
+            -2 >(gzip -c > {output.unmapped_r2}) \
+            -0 /dev/null \
+            -s /dev/null \
+            -n -
+        rm -f {params.temp_bam}
         """
 
 
@@ -1011,8 +1026,10 @@ rule count_snrna_premap_reads:
         fragments_file="$(mktemp)"
         trap 'rm -f "$idxstats_file" "$fragments_file"' EXIT
         samtools idxstats {input.bam} > "$idxstats_file"
-        samtools view -@ {threads} -f 64 -F 2308 {input.bam} \
-          | cut -f 3 \
+        samtools view -@ {threads} -F 2308 {input.bam} \
+          | cut -f 1,3 \
+          | sort -u \
+          | cut -f 2 \
           | sort \
           | uniq -c > "$fragments_file"
         python - "$idxstats_file" "$fragments_file" "{output.counts}" > {log} 2>&1 <<'PY'

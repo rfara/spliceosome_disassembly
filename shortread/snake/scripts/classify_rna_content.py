@@ -113,6 +113,16 @@ def count_primary_read1_alignments(path):
     return count
 
 
+def count_unique_query_names(path):
+    names = set()
+    with pysam.AlignmentFile(path, "rb") as bam:
+        for aln in bam.fetch(until_eof=True):
+            if aln.is_secondary or aln.is_supplementary:
+                continue
+            names.add(aln.query_name)
+    return len(names)
+
+
 def normalize_gene_type(raw_value):
     return raw_value.lower().replace("-", "_").replace(" ", "_")
 
@@ -307,8 +317,8 @@ def main():
 
     total_input_pairs = count_fastq_reads(args.umi_ready_r1)
     star_input_pairs = count_fastq_reads(args.star_input_r1)
-    rrna_pairs = count_primary_read1_alignments(args.rrna_bam)
-    snrna_pairs = count_primary_read1_alignments(args.snrna_bam)
+    rrna_pairs = count_unique_query_names(args.rrna_bam)
+    snrna_pairs = count_unique_query_names(args.snrna_bam)
 
     genomic_counts, genomic_mapped_pairs = classify_star_bam(
         args.star_bam,
