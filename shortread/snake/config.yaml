@@ -50,6 +50,14 @@ dedup:
   samtools_sort_memory: 8G
   extra: ""
 
+branchpoint_analysis:
+  mane_gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz
+  branchpoints: annotation/colaseq_branchpoints_scores.txt
+  anchor_window: 5
+  profile_upstream: 100
+  profile_downstream: 100
+  shared_min_reads_all_samples: 5
+
 qualimap:
   java_mem: 16G
   slurm_mem: 24G
@@ -73,3 +81,6 @@ resources:
   bam_qc_threads: 2
   rna_content_threads: 4
   snrna_count_threads: 2
+  branchpoint_reference_threads: 1
+  branchpoint_quant_threads: 1
+  branchpoint_aggregate_threads: 1

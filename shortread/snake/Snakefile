@@ -35,6 +35,7 @@ def benchmark_path(*parts):
 
 
 SAMPLES = list(config["samples"].keys())
+BRANCHPOINT_CFG = config["branchpoint_analysis"]
 
 BT2_SUFFIXES = [
     ".1.bt2",
@@ -49,6 +50,20 @@ RRNA_INDEX_PREFIX = results_path("reference", "rrna", "rrna")
 SNRNA_INDEX_PREFIX = results_path("reference", "snrna", "snrna")
 STAR_INDEX_DIR = results_path("reference", "star_genome")
 SLURM_TIME_LIMITS = config["slurm"]["time_limits"]
+BRANCHPOINT_GTF = repo_path(BRANCHPOINT_CFG["mane_gtf"])
+BRANCHPOINT_SCORE_FILE = repo_path(BRANCHPOINT_CFG["branchpoints"])
+BRANCHPOINT_REFERENCE = results_path("branchpoints", "reference", "mane_select_top_branchpoints.tsv")
+BRANCHPOINT_SAMPLE_METAPROFILE = results_path("branchpoints", "samples", "{sample}.metaprofile.tsv")
+BRANCHPOINT_SAMPLE_SUMMARY = results_path("branchpoints", "samples", "{sample}.summary.tsv")
+BRANCHPOINT_SAMPLE_SITE_COUNTS = results_path("branchpoints", "samples", "{sample}.site_counts.tsv.gz")
+BRANCHPOINT_SAMPLE_INTRON_OFFSETS = results_path("branchpoints", "samples", "{sample}.offset_counts.tsv.gz")
+BRANCHPOINT_COMBINED_METAPROFILE_BY_SAMPLE = results_path("branchpoints", "combined", "metaprofile.by_sample.tsv")
+BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION = results_path("branchpoints", "combined", "metaprofile.by_condition.tsv")
+BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE = results_path("branchpoints", "combined", "summary.by_sample.tsv")
+BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION = results_path("branchpoints", "combined", "summary.by_condition.tsv")
+BRANCHPOINT_COMBINED_SHARED_INTRONS = results_path("branchpoints", "combined", "shared_introns.tsv")
+BRANCHPOINT_COMBINED_PLOT_PNG = results_path("branchpoints", "combined", "branchpoint_5prime_metaprofile.png")
+BRANCHPOINT_COMBINED_PLOT_PDF = results_path("branchpoints", "combined", "branchpoint_5prime_metaprofile.pdf")
 BAM_QC_STAGES = {
     "premap_rrna": results_path("premap_rrna", "{sample}.rrna.bam"),
     "premap_snrna": results_path("premap_snrna", "{sample}.snrna.bam"),
@@ -84,6 +99,13 @@ def qualimap_bam_index(wildcards):
     if wildcards.stage == "dedup":
         return results_path("dedup", f"{wildcards.sample}.dedup.bam.bai")
     raise ValueError(f"Qualimap QC is not configured for stage: {wildcards.stage}")
+
+
+def sample_condition(sample):
+    sample_conditions = BRANCHPOINT_CFG.get("sample_conditions", {})
+    if sample in sample_conditions:
+        return sample_conditions[sample]
+    return sample.split("_", 1)[0]
 
 
 def cutadapt_adapter_args():
@@ -163,6 +185,9 @@ WORKFLOW_DIRS = [
     results_path("premap_snrna"),
     results_path("star"),
     results_path("dedup"),
+    results_path("branchpoints", "reference"),
+    results_path("branchpoints", "samples"),
+    results_path("branchpoints", "combined"),
     results_path("qc", "fastqc", "trimmed", "r1"),
     results_path("qc", "fastqc", "trimmed", "r2"),
     results_path("qc", "fastqc", "umi", "r1"),
@@ -194,6 +219,9 @@ WORKFLOW_DIRS = [
     log_path("qc_rna_content"),
     log_path("qc_snrna_counts"),
     log_path("qc_qualimap"),
+    log_path("branchpoints_reference"),
+    log_path("branchpoints_quantify"),
+    log_path("branchpoints_aggregate"),
     log_path("slurm"),
     benchmark_path("reference"),
     benchmark_path("trim"),
@@ -209,6 +237,9 @@ WORKFLOW_DIRS = [
     benchmark_path("qc_rna_content"),
     benchmark_path("qc_snrna_counts"),
     benchmark_path("qc_qualimap"),
+    benchmark_path("branchpoints_reference"),
+    benchmark_path("branchpoints_quantify"),
+    benchmark_path("branchpoints_aggregate"),
 ]
 
 
@@ -238,6 +269,18 @@ rule all:
         expand(results_path("qc", "snrna_counts", "{sample}.snrna_counts.tsv"), sample=SAMPLES),
         expand(results_path("qc", "qualimap", "{stage}", "{sample}", "qualimapReport.html"), sample=SAMPLES, stage=QUALIMAP_RNASEQ_STAGES.keys()),
         expand(results_path("qc", "qualimap", "{stage}", "{sample}", "rnaseq_qc_results.txt"), sample=SAMPLES, stage=QUALIMAP_RNASEQ_STAGES.keys()),
+        BRANCHPOINT_REFERENCE,
+        expand(BRANCHPOINT_SAMPLE_METAPROFILE, sample=SAMPLES),
+        expand(BRANCHPOINT_SAMPLE_SUMMARY, sample=SAMPLES),
+        expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES),
+        expand(BRANCHPOINT_SAMPLE_INTRON_OFFSETS, sample=SAMPLES),
+        BRANCHPOINT_COMBINED_METAPROFILE_BY_SAMPLE,
+        BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
+        BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
+        BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION,
+        BRANCHPOINT_COMBINED_SHARED_INTRONS,
+        BRANCHPOINT_COMBINED_PLOT_PNG,
+        BRANCHPOINT_COMBINED_PLOT_PDF,
 
 
 rule initialize_workdirs:
@@ -959,6 +1002,160 @@ rule index_deduplicated_bam:
         set -euo pipefail
         mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "{params.benchmark_dir}"
         samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
+        """
+
+
+rule build_branchpoint_reference:
+    input:
+        init=INIT_SENTINEL,
+        gtf=BRANCHPOINT_GTF,
+        branchpoints=BRANCHPOINT_SCORE_FILE
+    output:
+        reference=BRANCHPOINT_REFERENCE
+    log:
+        log_path("branchpoints_reference", "build.log")
+    benchmark:
+        benchmark_path("branchpoints_reference", "build.tsv")
+    threads: config["resources"]["branchpoint_reference_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "build_branchpoint_reference.py").resolve()),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_reference", "build.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_medium",
+            "16G",
+            "bp_ref",
+            log_path("slurm", "bp_ref.%A.log"),
+            config["resources"]["branchpoint_reference_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.reference})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --gtf {input.gtf} \
+          --branchpoints {input.branchpoints} \
+          --output {output.reference} \
+          > {log} 2>&1
+        """
+
+
+rule quantify_branchpoint_ends:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("dedup", "{sample}.dedup.bam"),
+        bai=results_path("dedup", "{sample}.dedup.bam.bai"),
+        reference=BRANCHPOINT_REFERENCE
+    output:
+        site_counts=BRANCHPOINT_SAMPLE_SITE_COUNTS,
+        offset_counts=BRANCHPOINT_SAMPLE_INTRON_OFFSETS,
+        metaprofile=BRANCHPOINT_SAMPLE_METAPROFILE,
+        summary=BRANCHPOINT_SAMPLE_SUMMARY
+    log:
+        log_path("branchpoints_quantify", "{sample}.log")
+    benchmark:
+        benchmark_path("branchpoints_quantify", "{sample}.tsv")
+    threads: config["resources"]["branchpoint_quant_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "quantify_branchpoint_ends.py").resolve()),
+        condition=lambda wildcards: sample_condition(wildcards.sample),
+        anchor_window=BRANCHPOINT_CFG["anchor_window"],
+        profile_upstream=BRANCHPOINT_CFG["profile_upstream"],
+        profile_downstream=BRANCHPOINT_CFG["profile_downstream"],
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("branchpoints_quantify", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "16G",
+            "bp_quant",
+            log_path("slurm", f"bp_quant.{wildcards.sample}.%A.log"),
+            config["resources"]["branchpoint_quant_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.site_counts})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --bam {input.bam} \
+          --reference {input.reference} \
+          --sample {wildcards.sample} \
+          --condition {params.condition} \
+          --anchor-window {params.anchor_window} \
+          --profile-upstream {params.profile_upstream} \
+          --profile-downstream {params.profile_downstream} \
+          --output-site-counts {output.site_counts} \
+          --output-offset-counts {output.offset_counts} \
+          --output-metaprofile {output.metaprofile} \
+          --output-summary {output.summary} \
+          > {log} 2>&1
+        """
+
+
+rule aggregate_branchpoint_profiles:
+    input:
+        init=INIT_SENTINEL,
+        metaprofiles=expand(BRANCHPOINT_SAMPLE_METAPROFILE, sample=SAMPLES),
+        summaries=expand(BRANCHPOINT_SAMPLE_SUMMARY, sample=SAMPLES),
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES),
+        intron_offsets=expand(BRANCHPOINT_SAMPLE_INTRON_OFFSETS, sample=SAMPLES)
+    output:
+        metaprofile_by_sample=BRANCHPOINT_COMBINED_METAPROFILE_BY_SAMPLE,
+        metaprofile_by_condition=BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
+        summary_by_sample=BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
+        summary_by_condition=BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION,
+        shared_introns=BRANCHPOINT_COMBINED_SHARED_INTRONS,
+        plot_png=BRANCHPOINT_COMBINED_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_COMBINED_PLOT_PDF
+    log:
+        log_path("branchpoints_aggregate", "combined.log")
+    benchmark:
+        benchmark_path("branchpoints_aggregate", "combined.tsv")
+    threads: config["resources"]["branchpoint_aggregate_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "aggregate_branchpoint_profiles.py").resolve()),
+        metaprofile_args=lambda wildcards, input: " ".join(
+            f"--metaprofile {shlex.quote(path)}" for path in input.metaprofiles
+        ),
+        summary_args=lambda wildcards, input: " ".join(
+            f"--summary {shlex.quote(path)}" for path in input.summaries
+        ),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        intron_offset_args=lambda wildcards, input: " ".join(
+            f"--intron-offsets {shlex.quote(path)}" for path in input.intron_offsets
+        ),
+        shared_min_reads=BRANCHPOINT_CFG["shared_min_reads_all_samples"],
+        benchmark_dir=str(Path(benchmark_path("branchpoints_aggregate", "combined.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bp_agg",
+            log_path("slurm", "bp_agg.%A.log"),
+            config["resources"]["branchpoint_aggregate_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.metaprofile_by_sample})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.metaprofile_args} \
+          {params.summary_args} \
+          {params.site_count_args} \
+          {params.intron_offset_args} \
+          --shared-min-reads {params.shared_min_reads} \
+          --output-metaprofile-by-sample {output.metaprofile_by_sample} \
+          --output-metaprofile-by-condition {output.metaprofile_by_condition} \
+          --output-summary-by-sample {output.summary_by_sample} \
+          --output-summary-by-condition {output.summary_by_condition} \
+          --output-shared-introns {output.shared_introns} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
+          > {log} 2>&1
         """
 
 
