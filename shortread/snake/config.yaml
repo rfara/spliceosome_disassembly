@@ -67,6 +67,17 @@ branchpoint_analysis:
   heterogeneity_condition_min_reads: 20
   heterogeneity_bootstraps: 500
   heterogeneity_seed: 1
+  sequence_context_genome_fasta: /Users/rupert.faraway/bio/reference/hs/fa/GRCh38.primary_assembly.genome.fa
+  sequence_context_signal_field: zero_or_plus_one_branchpoint_fragments
+  sequence_context_control_condition: ILS
+  sequence_context_query_condition: DIS
+  sequence_context_control_min_reads: 20
+  sequence_context_query_min_reads: 20
+  sequence_context_bp_upstream: 5
+  sequence_context_bp_downstream: 5
+  sequence_context_five_prime_intron_bases: 6
+  sequence_context_decile_fraction: 0.1
+  sequence_context_require_bp_center_base: A
 
 qualimap:
   java_mem: 16G
@@ -95,3 +106,4 @@ resources:
   branchpoint_quant_threads: 1
   branchpoint_aggregate_threads: 1
   branchpoint_heterogeneity_threads: 1
+  branchpoint_sequence_context_threads: 1

@@ -103,6 +103,8 @@ The combined outputs include both the original 5' end metaprofile and a coverage
 
 There is also an intron-level heterogeneity analysis that tests whether branchpoint-proximal reads are more unevenly distributed between introns than expected under a single shared branching probability. It reports this separately for each sample and pooled condition, and compares the configured query condition against the configured control condition using shared introns ranked by control branching.
 
+The workflow also includes a sequence-context analysis for branchpoint-associated RT arrest. It extracts branchpoint-flanking sequence and the first intronic bases after the 5' splice site, then uses the configured control condition to estimate sequence-dependent RT readthrough versus arrest.
+
 You can run just this analysis from the repository root with:
 
 ```bash
@@ -130,3 +132,8 @@ Main outputs:
 - `shortread/snake/results/branchpoints/heterogeneity/summary.by_condition.tsv`
 - `shortread/snake/results/branchpoints/heterogeneity/condition_comparison.summary.tsv`
 - `shortread/snake/results/branchpoints/heterogeneity/branching_heterogeneity.png`
+- `shortread/snake/results/branchpoints/sequence_context/summary.tsv`
+- `shortread/snake/results/branchpoints/sequence_context/context_effects.tsv`
+- `shortread/snake/results/branchpoints/sequence_context/top_bottom_enrichment.tsv`
+- `shortread/snake/results/branchpoints/sequence_context/model_summary.tsv`
+- `shortread/snake/results/branchpoints/sequence_context/branchpoint_sequence_context.png`

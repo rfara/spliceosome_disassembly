@@ -74,6 +74,13 @@ BRANCHPOINT_HETEROGENEITY_COMPARISON_INTRONS = results_path("branchpoints", "het
 BRANCHPOINT_HETEROGENEITY_CONTROL_DECILES = results_path("branchpoints", "heterogeneity", "condition_comparison.by_control_decile.tsv")
 BRANCHPOINT_HETEROGENEITY_PLOT_PNG = results_path("branchpoints", "heterogeneity", "branching_heterogeneity.png")
 BRANCHPOINT_HETEROGENEITY_PLOT_PDF = results_path("branchpoints", "heterogeneity", "branching_heterogeneity.pdf")
+BRANCHPOINT_SEQUENCE_CONTEXT_SUMMARY = results_path("branchpoints", "sequence_context", "summary.tsv")
+BRANCHPOINT_SEQUENCE_CONTEXT_INTRON_CONTEXTS = results_path("branchpoints", "sequence_context", "intron_contexts.tsv.gz")
+BRANCHPOINT_SEQUENCE_CONTEXT_EFFECTS = results_path("branchpoints", "sequence_context", "context_effects.tsv")
+BRANCHPOINT_SEQUENCE_CONTEXT_ENRICHMENT = results_path("branchpoints", "sequence_context", "top_bottom_enrichment.tsv")
+BRANCHPOINT_SEQUENCE_CONTEXT_MODEL_SUMMARY = results_path("branchpoints", "sequence_context", "model_summary.tsv")
+BRANCHPOINT_SEQUENCE_CONTEXT_PLOT_PNG = results_path("branchpoints", "sequence_context", "branchpoint_sequence_context.png")
+BRANCHPOINT_SEQUENCE_CONTEXT_PLOT_PDF = results_path("branchpoints", "sequence_context", "branchpoint_sequence_context.pdf")
 BAM_QC_STAGES = {
     "premap_rrna": results_path("premap_rrna", "{sample}.rrna.bam"),
     "premap_snrna": results_path("premap_snrna", "{sample}.snrna.bam"),
@@ -238,6 +245,7 @@ WORKFLOW_DIRS = [
     results_path("branchpoints", "samples"),
     results_path("branchpoints", "combined"),
     results_path("branchpoints", "heterogeneity"),
+    results_path("branchpoints", "sequence_context"),
     results_path("qc", "fastqc", "trimmed", "r1"),
     results_path("qc", "fastqc", "trimmed", "r2"),
     results_path("qc", "fastqc", "umi", "r1"),
@@ -1292,6 +1300,82 @@ rule analyze_branchpoint_heterogeneity:
           --output-condition-comparison-summary {output.comparison_summary} \
           --output-condition-comparison-introns {output.comparison_introns} \
           --output-control-deciles {output.control_deciles} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_branchpoint_sequence_context:
+    input:
+        init=INIT_SENTINEL,
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES)
+    output:
+        summary=BRANCHPOINT_SEQUENCE_CONTEXT_SUMMARY,
+        intron_contexts=BRANCHPOINT_SEQUENCE_CONTEXT_INTRON_CONTEXTS,
+        context_effects=BRANCHPOINT_SEQUENCE_CONTEXT_EFFECTS,
+        enrichment=BRANCHPOINT_SEQUENCE_CONTEXT_ENRICHMENT,
+        model_summary=BRANCHPOINT_SEQUENCE_CONTEXT_MODEL_SUMMARY,
+        plot_png=BRANCHPOINT_SEQUENCE_CONTEXT_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_SEQUENCE_CONTEXT_PLOT_PDF
+    log:
+        log_path("branchpoints_sequence_context", "analysis.log")
+    benchmark:
+        benchmark_path("branchpoints_sequence_context", "analysis.tsv")
+    threads: config["resources"].get("branchpoint_sequence_context_threads", 1)
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_branchpoint_sequence_context.py").resolve()),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        genome_fasta=repo_path(BRANCHPOINT_CFG["sequence_context_genome_fasta"]),
+        signal_field=BRANCHPOINT_CFG.get("sequence_context_signal_field", "zero_or_plus_one_branchpoint_fragments"),
+        control_condition=BRANCHPOINT_CFG.get("sequence_context_control_condition", "ILS"),
+        query_condition=BRANCHPOINT_CFG.get("sequence_context_query_condition", "DIS"),
+        control_min_reads=BRANCHPOINT_CFG.get("sequence_context_control_min_reads", 20),
+        query_min_reads=BRANCHPOINT_CFG.get("sequence_context_query_min_reads", 20),
+        bp_upstream=BRANCHPOINT_CFG.get("sequence_context_bp_upstream", 5),
+        bp_downstream=BRANCHPOINT_CFG.get("sequence_context_bp_downstream", 5),
+        five_prime_intron_bases=BRANCHPOINT_CFG.get("sequence_context_five_prime_intron_bases", 6),
+        decile_fraction=BRANCHPOINT_CFG.get("sequence_context_decile_fraction", 0.1),
+        require_bp_center_base=BRANCHPOINT_CFG.get("sequence_context_require_bp_center_base", ""),
+        require_bp_center_base_arg=(
+            f"--require-bp-center-base {shlex.quote(str(BRANCHPOINT_CFG.get('sequence_context_require_bp_center_base', '')))}"
+            if BRANCHPOINT_CFG.get("sequence_context_require_bp_center_base", "")
+            else ""
+        ),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_sequence_context", "analysis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "12G",
+            "bp_seqctx",
+            log_path("slurm", "bp_seqctx.%A.log"),
+            config["resources"].get("branchpoint_sequence_context_threads", 1),
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.site_count_args} \
+          --genome-fasta {params.genome_fasta} \
+          --signal-field {params.signal_field} \
+          --control-condition {params.control_condition} \
+          --query-condition {params.query_condition} \
+          --control-min-reads {params.control_min_reads} \
+          --query-min-reads {params.query_min_reads} \
+          --bp-upstream {params.bp_upstream} \
+          --bp-downstream {params.bp_downstream} \
+          --five-prime-intron-bases {params.five_prime_intron_bases} \
+          --decile-fraction {params.decile_fraction} \
+          {params.require_bp_center_base_arg} \
+          --output-summary {output.summary} \
+          --output-intron-contexts {output.intron_contexts} \
+          --output-context-effects {output.context_effects} \
+          --output-top-bottom-enrichment {output.enrichment} \
+          --output-model-summary {output.model_summary} \
           --output-plot-png {output.plot_png} \
           --output-plot-pdf {output.plot_pdf} \
           > {log} 2>&1
