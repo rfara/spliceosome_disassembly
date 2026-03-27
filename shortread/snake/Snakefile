@@ -144,6 +144,10 @@ def cutadapt_r1_adapter_args():
     trim_cfg = config["trim"]
     adapters = [
         format_cutadapt_adapter(
+            f"A{{{trim_cfg['poly_a_min']}}}",
+            min_overlap=trim_cfg["poly_a_min"],
+        ),
+        format_cutadapt_adapter(
             f"G{{{trim_cfg['poly_g_min']}}}",
             min_overlap=trim_cfg["poly_g_min"],
             disallow_internal=True,
