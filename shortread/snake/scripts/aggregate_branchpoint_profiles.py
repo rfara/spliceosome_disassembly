@@ -34,6 +34,8 @@ def parse_args():
     parser.add_argument("--output-shared-introns", required=True)
     parser.add_argument("--output-plot-png", required=True)
     parser.add_argument("--output-plot-pdf", required=True)
+    parser.add_argument("--output-coverage-plot-png")
+    parser.add_argument("--output-coverage-plot-pdf")
     return parser.parse_args()
 
 
@@ -113,27 +115,23 @@ def summarise_condition_profiles(metaprofile_rows, condition_order):
     for row in metaprofile_rows:
         grouped[row["condition"]][int(row["offset_nt"])].append(row)
 
+    numeric_fields = [field for field in metaprofile_rows[0] if field not in {"sample", "condition", "offset_nt"}]
     condition_rows = []
     for condition in condition_order:
         offsets = sorted(grouped[condition])
         for offset in offsets:
             entries = grouped[condition][offset]
-            cpm_values = [float(entry["cpm"]) for entry in entries]
-            anchored_fraction_values = [float(entry["anchored_fraction"]) for entry in entries]
-            condition_rows.append(
-                {
-                    "condition": condition,
-                    "offset_nt": offset,
-                    "replicate_count": len(entries),
-                    "mean_cpm": float_mean(cpm_values),
-                    "sd_cpm": float_sd(cpm_values),
-                    "sem_cpm": float_sem(cpm_values),
-                    "mean_anchored_fraction": float_mean(anchored_fraction_values),
-                    "sd_anchored_fraction": float_sd(anchored_fraction_values),
-                    "mean_anchored_percent": float_mean(anchored_fraction_values) * 100.0,
-                    "sd_anchored_percent": float_sd(anchored_fraction_values) * 100.0,
-                }
-            )
+            condition_row = {
+                "condition": condition,
+                "offset_nt": offset,
+                "replicate_count": len(entries),
+            }
+            for field in numeric_fields:
+                values = [float(entry[field]) for entry in entries]
+                condition_row[f"mean_{field}"] = float_mean(values)
+                condition_row[f"sd_{field}"] = float_sd(values)
+                condition_row[f"sem_{field}"] = float_sem(values)
+            condition_rows.append(condition_row)
     return condition_rows
 
 
@@ -210,6 +208,27 @@ def aggregate_offset_counts(intron_offset_counts, shared_introns):
     return total_counts
 
 
+def aggregate_coverage_counts(intron_offset_counts, site_counts, site_metadata, shared_introns, offset_range):
+    coverage_counts = Counter()
+    ordered_offsets = sorted(offset_range)
+
+    for intron_id in shared_introns:
+        intron_offsets = intron_offset_counts.get(intron_id, {})
+        intron_row = site_counts.get(intron_id, {})
+        anchored_fragments = count_value(intron_row, "anchored_fragments")
+        observed_fragments = sum(intron_offsets.values())
+        upstream_overflow = max(anchored_fragments - observed_fragments, 0)
+        three_prime_offset = count_value(site_metadata[intron_id], "branchpoint_to_3ss_nt")
+
+        cumulative_fragments = upstream_overflow
+        for offset in ordered_offsets:
+            cumulative_fragments += intron_offsets.get(offset, 0)
+            if offset <= three_prime_offset:
+                coverage_counts[offset] += cumulative_fragments
+
+    return coverage_counts
+
+
 def build_sample_metaprofile_rows(
     sample,
     condition,
@@ -217,11 +236,14 @@ def build_sample_metaprofile_rows(
     anchored_fragments,
     offset_range,
     total_offset_counts,
+    total_coverage_counts,
 ):
     rows = []
     for offset in offset_range:
         read_count = total_offset_counts[offset]
         anchored_fraction = 0.0 if anchored_fragments == 0 else read_count / anchored_fragments
+        coverage_count = total_coverage_counts[offset]
+        coverage_anchored_fraction = 0.0 if anchored_fragments == 0 else coverage_count / anchored_fragments
         rows.append(
             {
                 "sample": sample,
@@ -231,6 +253,12 @@ def build_sample_metaprofile_rows(
                 "cpm": 0.0 if library_fragments == 0 else (read_count * 1_000_000.0 / library_fragments),
                 "anchored_fraction": anchored_fraction,
                 "anchored_percent": anchored_fraction * 100.0,
+                "coverage_count": coverage_count,
+                "coverage_cpm": 0.0
+                if library_fragments == 0
+                else (coverage_count * 1_000_000.0 / library_fragments),
+                "coverage_anchored_fraction": coverage_anchored_fraction,
+                "coverage_anchored_percent": coverage_anchored_fraction * 100.0,
             }
         )
     return rows
@@ -300,12 +328,17 @@ def build_sample_summary_row(
     return summary_row
 
 
-def plot_results(
+def plot_metaprofile_figure(
     sample_rows,
     condition_rows,
     summary_rows,
     condition_order,
     shared_min_reads,
+    sample_value_field,
+    condition_value_field,
+    xlabel,
+    ylabel,
+    title,
     output_png,
     output_pdf,
 ):
@@ -331,7 +364,7 @@ def plot_results(
         color = CONDITION_COLORS.get(condition, "#4c4c4c")
         ax_profile.plot(
             [int(row["offset_nt"]) for row in ordered_rows],
-            [float(row["anchored_percent"]) for row in ordered_rows],
+            [float(row[sample_value_field]) for row in ordered_rows],
             color=color,
             alpha=0.25,
             linewidth=1.0,
@@ -342,7 +375,7 @@ def plot_results(
         color = CONDITION_COLORS.get(condition, "#4c4c4c")
         ax_profile.plot(
             [int(row["offset_nt"]) for row in ordered_rows],
-            [float(row["mean_anchored_percent"]) for row in ordered_rows],
+            [float(row[condition_value_field]) for row in ordered_rows],
             color=color,
             linewidth=2.5,
             label=condition,
@@ -350,9 +383,8 @@ def plot_results(
 
     ax_profile.axvline(0, color="#4c4c4c", linestyle="--", linewidth=1)
     ax_profile.set_xlim(-60, 10)
-    ax_profile.set_xlabel("Read1 5' end offset from selected branchpoint (nt; + toward intron 3' end)")
-    ax_profile.set_ylabel("Anchored shared-intron fragments (%)")
-    title = "Branchpoint-centred 5' end metaprofile"
+    ax_profile.set_xlabel(xlabel)
+    ax_profile.set_ylabel(ylabel)
     if shared_min_reads > 0:
         title += f"\nShared introns with >= {shared_min_reads} anchored reads in every sample"
     ax_profile.set_title(title)
@@ -393,8 +425,53 @@ def plot_results(
     plt.close(figure)
 
 
+def plot_results(
+    sample_rows,
+    condition_rows,
+    summary_rows,
+    condition_order,
+    shared_min_reads,
+    output_png,
+    output_pdf,
+    coverage_output_png=None,
+    coverage_output_pdf=None,
+):
+    plot_metaprofile_figure(
+        sample_rows,
+        condition_rows,
+        summary_rows,
+        condition_order,
+        shared_min_reads,
+        "anchored_percent",
+        "mean_anchored_percent",
+        "Read1 5' end offset from selected branchpoint (nt; + toward intron 3' end)",
+        "Anchored shared-intron fragments (%)",
+        "Branchpoint-centred 5' end metaprofile",
+        output_png,
+        output_pdf,
+    )
+
+    if coverage_output_png and coverage_output_pdf:
+        plot_metaprofile_figure(
+            sample_rows,
+            condition_rows,
+            summary_rows,
+            condition_order,
+            shared_min_reads,
+            "coverage_anchored_percent",
+            "mean_coverage_anchored_percent",
+            "Offset from selected branchpoint (nt; + toward intron 3' end)",
+            "Estimated anchored-fragment coverage (%)",
+            "Branchpoint-centred fragment coverage\nAssuming anchored 3' ends align to the 3' splice site",
+            coverage_output_png,
+            coverage_output_pdf,
+        )
+
+
 def main():
     args = parse_args()
+    if bool(args.output_coverage_plot_png) != bool(args.output_coverage_plot_pdf):
+        raise ValueError("Coverage plot outputs must provide both PNG and PDF paths")
 
     raw_metaprofile_rows = []
     for path in args.metaprofiles:
@@ -448,6 +525,13 @@ def main():
     for sample in sample_order:
         raw_summary_row = raw_summary_by_sample[sample]
         total_offset_counts = aggregate_offset_counts(intron_offsets_by_sample.get(sample, {}), shared_introns)
+        total_coverage_counts = aggregate_coverage_counts(
+            intron_offsets_by_sample.get(sample, {}),
+            site_counts_by_sample.get(sample, {}),
+            site_metadata,
+            shared_introns,
+            offset_range,
+        )
         sample_profile_rows.extend(
             build_sample_metaprofile_rows(
                 sample,
@@ -456,6 +540,7 @@ def main():
                 sum(count_value(site_counts_by_sample.get(sample, {}).get(intron_id, {}), "anchored_fragments") for intron_id in shared_introns),
                 offset_range,
                 total_offset_counts,
+                total_coverage_counts,
             )
         )
         sample_summary_rows.append(
@@ -490,6 +575,8 @@ def main():
         args.shared_min_reads,
         args.output_plot_png,
         args.output_plot_pdf,
+        args.output_coverage_plot_png,
+        args.output_coverage_plot_pdf,
     )
 
     print(f"Shared introns retained: {len(shared_introns)}")

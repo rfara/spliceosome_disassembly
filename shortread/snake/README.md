@@ -99,6 +99,9 @@ It:
 Positive offsets in the metaprofile point towards the intron 3' splice site.
 The per-sample summary tables report branchpoint-proximal counts at offset `0`, offset `+1`, and combined `0/+1`, both as fractions of anchored fragments and as CPM.
 The threshold for the shared intron set is configurable via `branchpoint_analysis.shared_min_reads_all_samples` in `shortread/snake/config.yaml`.
+The combined outputs include both the original 5' end metaprofile and a coverage-style metaprofile that assumes anchored 3' ends align to the 3' splice site.
+
+There is also an intron-level heterogeneity analysis that tests whether branchpoint-proximal reads are more unevenly distributed between introns than expected under a single shared branching probability. It reports this separately for each sample and pooled condition, and compares the configured query condition against the configured control condition using shared introns ranked by control branching.
 
 You can run just this analysis from the repository root with:
 
@@ -122,3 +125,8 @@ Main outputs:
 - `shortread/snake/results/branchpoints/combined/summary.by_sample.tsv`
 - `shortread/snake/results/branchpoints/combined/summary.by_condition.tsv`
 - `shortread/snake/results/branchpoints/combined/branchpoint_5prime_metaprofile.png`
+- `shortread/snake/results/branchpoints/combined/branchpoint_coverage_metaprofile.png`
+- `shortread/snake/results/branchpoints/heterogeneity/summary.by_sample.tsv`
+- `shortread/snake/results/branchpoints/heterogeneity/summary.by_condition.tsv`
+- `shortread/snake/results/branchpoints/heterogeneity/condition_comparison.summary.tsv`
+- `shortread/snake/results/branchpoints/heterogeneity/branching_heterogeneity.png`

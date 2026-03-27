@@ -64,6 +64,16 @@ BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION = results_path("branchpoints", "combin
 BRANCHPOINT_COMBINED_SHARED_INTRONS = results_path("branchpoints", "combined", "shared_introns.tsv")
 BRANCHPOINT_COMBINED_PLOT_PNG = results_path("branchpoints", "combined", "branchpoint_5prime_metaprofile.png")
 BRANCHPOINT_COMBINED_PLOT_PDF = results_path("branchpoints", "combined", "branchpoint_5prime_metaprofile.pdf")
+BRANCHPOINT_COMBINED_COVERAGE_PLOT_PNG = results_path("branchpoints", "combined", "branchpoint_coverage_metaprofile.png")
+BRANCHPOINT_COMBINED_COVERAGE_PLOT_PDF = results_path("branchpoints", "combined", "branchpoint_coverage_metaprofile.pdf")
+BRANCHPOINT_HETEROGENEITY_SUMMARY_BY_SAMPLE = results_path("branchpoints", "heterogeneity", "summary.by_sample.tsv")
+BRANCHPOINT_HETEROGENEITY_SUMMARY_BY_CONDITION = results_path("branchpoints", "heterogeneity", "summary.by_condition.tsv")
+BRANCHPOINT_HETEROGENEITY_CONDITION_INTRONS = results_path("branchpoints", "heterogeneity", "condition_introns.tsv.gz")
+BRANCHPOINT_HETEROGENEITY_COMPARISON_SUMMARY = results_path("branchpoints", "heterogeneity", "condition_comparison.summary.tsv")
+BRANCHPOINT_HETEROGENEITY_COMPARISON_INTRONS = results_path("branchpoints", "heterogeneity", "condition_comparison.shared_introns.tsv.gz")
+BRANCHPOINT_HETEROGENEITY_CONTROL_DECILES = results_path("branchpoints", "heterogeneity", "condition_comparison.by_control_decile.tsv")
+BRANCHPOINT_HETEROGENEITY_PLOT_PNG = results_path("branchpoints", "heterogeneity", "branching_heterogeneity.png")
+BRANCHPOINT_HETEROGENEITY_PLOT_PDF = results_path("branchpoints", "heterogeneity", "branching_heterogeneity.pdf")
 BAM_QC_STAGES = {
     "premap_rrna": results_path("premap_rrna", "{sample}.rrna.bam"),
     "premap_snrna": results_path("premap_snrna", "{sample}.snrna.bam"),
@@ -135,7 +145,6 @@ def cutadapt_r1_adapter_args():
             format_cutadapt_adapter(
                 adapter,
                 min_overlap=trim_cfg.get("adapter_min_overlap", 6),
-                disallow_internal=True,
             )
             for adapter in trim_cfg["illumina_3p_adapters"]
         ],
@@ -174,7 +183,6 @@ def cutadapt_r2_adapter():
         trim_cfg["r2_3p_adapter"],
         min_overlap=trim_cfg.get("r2_adapter_min_overlap", 23),
         error_rate=trim_cfg.get("r2_adapter_error_rate", 0.2),
-        disallow_internal=True,
     )
 
 
@@ -229,6 +237,7 @@ WORKFLOW_DIRS = [
     results_path("branchpoints", "reference"),
     results_path("branchpoints", "samples"),
     results_path("branchpoints", "combined"),
+    results_path("branchpoints", "heterogeneity"),
     results_path("qc", "fastqc", "trimmed", "r1"),
     results_path("qc", "fastqc", "trimmed", "r2"),
     results_path("qc", "fastqc", "umi", "r1"),
@@ -1168,7 +1177,9 @@ rule aggregate_branchpoint_profiles:
         summary_by_condition=BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION,
         shared_introns=BRANCHPOINT_COMBINED_SHARED_INTRONS,
         plot_png=BRANCHPOINT_COMBINED_PLOT_PNG,
-        plot_pdf=BRANCHPOINT_COMBINED_PLOT_PDF
+        plot_pdf=BRANCHPOINT_COMBINED_PLOT_PDF,
+        coverage_plot_png=BRANCHPOINT_COMBINED_COVERAGE_PLOT_PNG,
+        coverage_plot_pdf=BRANCHPOINT_COMBINED_COVERAGE_PLOT_PDF
     log:
         log_path("branchpoints_aggregate", "combined.log")
     benchmark:
@@ -1214,6 +1225,73 @@ rule aggregate_branchpoint_profiles:
           --output-summary-by-sample {output.summary_by_sample} \
           --output-summary-by-condition {output.summary_by_condition} \
           --output-shared-introns {output.shared_introns} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
+          --output-coverage-plot-png {output.coverage_plot_png} \
+          --output-coverage-plot-pdf {output.coverage_plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_branchpoint_heterogeneity:
+    input:
+        init=INIT_SENTINEL,
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES)
+    output:
+        summary_by_sample=BRANCHPOINT_HETEROGENEITY_SUMMARY_BY_SAMPLE,
+        summary_by_condition=BRANCHPOINT_HETEROGENEITY_SUMMARY_BY_CONDITION,
+        condition_introns=BRANCHPOINT_HETEROGENEITY_CONDITION_INTRONS,
+        comparison_summary=BRANCHPOINT_HETEROGENEITY_COMPARISON_SUMMARY,
+        comparison_introns=BRANCHPOINT_HETEROGENEITY_COMPARISON_INTRONS,
+        control_deciles=BRANCHPOINT_HETEROGENEITY_CONTROL_DECILES,
+        plot_png=BRANCHPOINT_HETEROGENEITY_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_HETEROGENEITY_PLOT_PDF
+    log:
+        log_path("branchpoints_heterogeneity", "analysis.log")
+    benchmark:
+        benchmark_path("branchpoints_heterogeneity", "analysis.tsv")
+    threads: config["resources"].get("branchpoint_heterogeneity_threads", 1)
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_branchpoint_heterogeneity.py").resolve()),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        signal_field=BRANCHPOINT_CFG.get("heterogeneity_signal_field", "zero_or_plus_one_branchpoint_fragments"),
+        query_condition=BRANCHPOINT_CFG.get("heterogeneity_query_condition", "DIS"),
+        control_condition=BRANCHPOINT_CFG.get("heterogeneity_control_condition", "ILS"),
+        sample_min_reads=BRANCHPOINT_CFG.get("heterogeneity_sample_min_reads", 10),
+        condition_min_reads=BRANCHPOINT_CFG.get("heterogeneity_condition_min_reads", 20),
+        bootstraps=BRANCHPOINT_CFG.get("heterogeneity_bootstraps", 500),
+        seed=BRANCHPOINT_CFG.get("heterogeneity_seed", 1),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_heterogeneity", "analysis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "12G",
+            "bp_hetero",
+            log_path("slurm", "bp_hetero.%A.log"),
+            config["resources"].get("branchpoint_heterogeneity_threads", 1),
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary_by_sample})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.site_count_args} \
+          --signal-field {params.signal_field} \
+          --sample-min-reads {params.sample_min_reads} \
+          --condition-min-reads {params.condition_min_reads} \
+          --bootstraps {params.bootstraps} \
+          --seed {params.seed} \
+          --query-condition {params.query_condition} \
+          --control-condition {params.control_condition} \
+          --output-summary-by-sample {output.summary_by_sample} \
+          --output-summary-by-condition {output.summary_by_condition} \
+          --output-condition-introns {output.condition_introns} \
+          --output-condition-comparison-summary {output.comparison_summary} \
+          --output-condition-comparison-introns {output.comparison_introns} \
+          --output-control-deciles {output.control_deciles} \
           --output-plot-png {output.plot_png} \
           --output-plot-pdf {output.plot_pdf} \
           > {log} 2>&1

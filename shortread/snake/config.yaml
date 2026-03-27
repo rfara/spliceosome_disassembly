@@ -60,6 +60,13 @@ branchpoint_analysis:
   profile_upstream: 100
   profile_downstream: 100
   shared_min_reads_all_samples: 5
+  heterogeneity_signal_field: zero_or_plus_one_branchpoint_fragments
+  heterogeneity_query_condition: DIS
+  heterogeneity_control_condition: ILS
+  heterogeneity_sample_min_reads: 10
+  heterogeneity_condition_min_reads: 20
+  heterogeneity_bootstraps: 500
+  heterogeneity_seed: 1
 
 qualimap:
   java_mem: 16G
@@ -87,3 +94,4 @@ resources:
   branchpoint_reference_threads: 1
   branchpoint_quant_threads: 1
   branchpoint_aggregate_threads: 1
+  branchpoint_heterogeneity_threads: 1
