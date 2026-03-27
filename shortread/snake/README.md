@@ -2,7 +2,7 @@
 
 This Snakemake workflow processes paired-end RNA-seq reads through:
 
-1. paired-end trimming with `cutadapt`
+1. paired-end trimming with a two-stage `cutadapt` pass
 2. UMI extraction from `R1` while retaining synchronized `R2` reads with `umi_tools extract`
 3. removal of the retained fixed `CGTGAT` sequence from `R1`
 4. permissive paired pre-mapping to rRNA with `bowtie2`
@@ -30,6 +30,12 @@ snakemake -s shortread/snake/Snakefile --cores 16 --use-conda
 The workflow derives each `R2` path automatically by replacing `_R1_` with `_R2_` in the configured sample path.
 
 The main parameter you may want to adjust before the first run is `star.sjdb_overhang` in `shortread/snake/config.yaml`, which should match read length minus one.
+
+The trimming defaults are now biased towards rescuing low-quality `R2` tails. The first `cutadapt` pass trims the anchored `R2` 5' fixed sequence plus a wildcarded `R2` 3' adapter (`N{15}AGATCGGAAGAGCGTCGTGC`). A second pass then performs a single terminal `poly-G` cleanup on `R2` before the final minimum-length filter, which avoids repeatedly re-trimming `G` tails after other adapters have already been removed.
+
+`R1` adapter trimming also uses a minimum overlap threshold (`trim.adapter_min_overlap`, default `6`) so short real terminal motifs such as `AG` are not treated as adapter sequence.
+
+STAR itself does not provide a true mate-specific mismatch/score threshold for paired-end reads. The workflow therefore rescues damaged `R2` reads indirectly by running STAR in local mode and lowering the pair-level normalized score/match filters through `star.align_extra`.
 
 For SLURM submission with Snakemake 8, each rule exposes an `sbatch` argument string in `params.cluster`. It is safer to submit the Snakemake controller itself through `sbatch` as well, so a dropped interactive session does not kill the workflow. Use the helper script:
 

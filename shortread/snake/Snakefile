@@ -108,12 +108,37 @@ def sample_condition(sample):
     return sample.split("_", 1)[0]
 
 
-def cutadapt_adapter_args():
+def format_cutadapt_adapter(adapter, min_overlap=None, error_rate=None, disallow_internal=False):
+    spec = str(adapter).strip()
+    if disallow_internal and not spec.endswith("X"):
+        spec = f"{spec}X"
+
+    adapter_params = []
+    if error_rate is not None:
+        adapter_params.append(f"e={error_rate}")
+    if min_overlap is not None:
+        adapter_params.append(f"min_overlap={min_overlap}")
+    if adapter_params:
+        spec = f"{spec};" + ";".join(adapter_params)
+    return spec
+
+
+def cutadapt_r1_adapter_args():
     trim_cfg = config["trim"]
     adapters = [
-        f"G{{{trim_cfg['poly_g_min']}}}",
-        f"A{{{trim_cfg['poly_a_min']}}}",
-        *trim_cfg["illumina_3p_adapters"],
+        format_cutadapt_adapter(
+            f"G{{{trim_cfg['poly_g_min']}}}",
+            min_overlap=trim_cfg["poly_g_min"],
+            disallow_internal=True,
+        ),
+        *[
+            format_cutadapt_adapter(
+                adapter,
+                min_overlap=trim_cfg.get("adapter_min_overlap", 6),
+                disallow_internal=True,
+            )
+            for adapter in trim_cfg["illumina_3p_adapters"]
+        ],
     ]
     return " ".join(f"-a {shlex.quote(adapter)}" for adapter in adapters)
 
@@ -144,7 +169,22 @@ def star_align_extra():
 
 
 def cutadapt_r2_adapter():
-    return config["trim"]["r2_3p_adapter"]
+    trim_cfg = config["trim"]
+    return format_cutadapt_adapter(
+        trim_cfg["r2_3p_adapter"],
+        min_overlap=trim_cfg.get("r2_adapter_min_overlap", 23),
+        error_rate=trim_cfg.get("r2_adapter_error_rate", 0.2),
+        disallow_internal=True,
+    )
+
+
+def cutadapt_r2_poly_g_adapter():
+    trim_cfg = config["trim"]
+    return format_cutadapt_adapter(
+        f"G{{{trim_cfg['poly_g_min']}}}",
+        min_overlap=trim_cfg["poly_g_min"],
+        disallow_internal=True,
+    )
 
 
 def slurm_cluster_args(qos, mem, job_name, slurm_log_file, threads):
@@ -165,8 +205,9 @@ def slurm_cluster_args(qos, mem, job_name, slurm_log_file, threads):
     return " ".join(parts)
 
 
-TRIM_ADAPTER_ARGS = cutadapt_adapter_args()
+TRIM_R1_ADAPTER_ARGS = cutadapt_r1_adapter_args()
 TRIM_R2_ADAPTER = cutadapt_r2_adapter()
+TRIM_R2_POLY_G_ADAPTER = cutadapt_r2_poly_g_adapter()
 PREMAP_ARGS = bowtie2_preset(config["premap"])
 STAR_GENOME_GENERATE_EXTRA = star_genome_generate_extra()
 STAR_ALIGN_EXTRA = star_align_extra()
@@ -204,6 +245,7 @@ WORKFLOW_DIRS = [
     results_path("qc", "qualimap", "star"),
     results_path("qc", "qualimap", "dedup"),
     results_path("tmp", "premap"),
+    results_path("tmp", "trim"),
     results_path("tmp", "umi_dedup"),
     log_path("reference"),
     log_path("trim"),
@@ -424,10 +466,12 @@ rule trim_reads:
         min_length_r1=config["trim"]["min_length_r1"],
         min_length_r2=config["trim"]["min_length_r2"],
         times=config["trim"]["times"],
-        adapter_args=lambda wildcards: TRIM_ADAPTER_ARGS,
+        r1_adapter_args=lambda wildcards: TRIM_R1_ADAPTER_ARGS,
         r2_fixed_5p_sequence=config["trim"]["r2_fixed_5p_sequence"],
         r2_adapter=lambda wildcards: TRIM_R2_ADAPTER,
+        r2_poly_g_adapter=lambda wildcards: TRIM_R2_POLY_G_ADAPTER,
         extra=config["trim"].get("extra", ""),
+        tmp_root=results_path("tmp", "trim"),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("trim", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_short",
@@ -439,22 +483,32 @@ rule trim_reads:
     shell:
         r"""
         set -euo pipefail
-        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {log})" "{params.benchmark_dir}"
+        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {log})" "{params.benchmark_dir}" "{params.tmp_root}"
+        tmpdir="$(mktemp -d "{params.tmp_root}/{wildcards.sample}.XXXXXX")"
+        trap 'rm -rf "$tmpdir"' EXIT
+        cutadapt \
+          -j {threads} \
+          --times {params.times} \
+          {params.r1_adapter_args} \
+          -G ^{params.r2_fixed_5p_sequence} \
+          -A {params.r2_adapter:q} \
+          --poly-a \
+          {params.extra} \
+          -o "$tmpdir/{wildcards.sample}.step1.r1.fastq.gz" \
+          -p "$tmpdir/{wildcards.sample}.step1.r2.fastq.gz" \
+          {input.r1} \
+          {input.r2} \
+          > {log} 2>&1
         cutadapt \
           -j {threads} \
           --minimum-length {params.min_length_r1}:{params.min_length_r2} \
           --pair-filter=any \
-          --times {params.times} \
-          {params.adapter_args} \
-          -G ^{params.r2_fixed_5p_sequence} \
-          -A {params.r2_adapter} \
-          --poly-a \
-          {params.extra} \
+          -A {params.r2_poly_g_adapter:q} \
           -o {output.r1} \
           -p {output.r2} \
-          {input.r1} \
-          {input.r2} \
-          > {log} 2>&1
+          "$tmpdir/{wildcards.sample}.step1.r1.fastq.gz" \
+          "$tmpdir/{wildcards.sample}.step1.r2.fastq.gz" \
+          >> {log} 2>&1
         """
 
 
@@ -769,7 +823,6 @@ rule map_genome_star:
           --genomeDir {input.index} \
           --readFilesIn {input.r1} {input.r2} \
           --readFilesCommand zcat \
-          --alignEndsType EndToEnd \
           --outReadsUnmapped Fastx \
           --outSAMtype BAM SortedByCoordinate \
           --outSAMattributes NH HI AS nM MD \

@@ -13,13 +13,16 @@ references:
   genome_gtf: /groups/plaschka/rupert.faraway/reference/hs/annotation/gencode.v44.primary_assembly.basic.annotation.gtf
 
 trim:
-  min_length_r1: 20
-  min_length_r2: 16
-  poly_g_min: 10
+  min_length_r1: 30
+  min_length_r2: 15
+  poly_g_min: 6
   poly_a_min: 10
   times: 3
+  adapter_min_overlap: 4 # Prevent short terminal motifs such as a genuine R1 splice-site AG from matching adapters.
   r2_fixed_5p_sequence: GTCCTG
-  r2_3p_adapter: NNNNATCACGNNNNNAGATCGGAAGAGCGTCGTG
+  r2_3p_adapter: N{15}AGATCGGAAGAGCGTCGTGC
+  r2_adapter_min_overlap: 23 # 15 wildcard bases + at least 8 fixed adapter bases.
+  r2_adapter_error_rate: 0.2
   illumina_3p_adapters:
     - AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
     - AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
@@ -42,7 +45,7 @@ star:
   genome_sa_index_nbases: 14
   limit_bam_sort_ram: 24000000000
   genome_generate_extra: ""
-  align_extra: "--twopassMode Basic"
+  align_extra: "--twopassMode Basic --alignEndsType Local --outFilterScoreMinOverLread 0.45 --outFilterMatchNminOverLread 0.45"
 
 dedup:
   method: directional
