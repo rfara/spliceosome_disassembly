@@ -55,7 +55,8 @@ ggplot(snrna_summarised_counts_canonical,
   theme_classic() +
   theme(axis.text = element_text(color = "black"),
         axis.ticks = element_line(color = "black")) +
-  scale_color_manual(values = c("black", "#D33B76"))
+  scale_color_manual(values = c("black", "#D33B76")) ->
+  snrna_proportions
   
 snrna_summarised_counts_canonical %>%
   filter(ip == "ILS") %>%
@@ -77,4 +78,11 @@ ggplot(relative_to_ils,
   geom_hline(yintercept = 1, linetype = "dashed") +
   theme(axis.text = element_text(color = "black"),
         axis.ticks = element_line(color = "black")) +
-  scale_color_manual(values = c("black", "#D33B76"))
+  scale_color_manual(values = c("black", "#D33B76")) ->
+  relative_snrna_proportions
+
+ggsave("shortread/plots/snrna_proportions.pdf", snrna_proportions,
+       width = 5, height = 3)
+
+ggsave("shortread/plots/relative_snrna_proportions.pdf", relative_snrna_proportions,
+       width = 5, height = 3)

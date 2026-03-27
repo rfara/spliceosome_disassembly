@@ -3,3 +3,4 @@ shortread/snake/results
 shortread/snake/logs
 shortread/snake/benchmarks
 shortread/snake/example_snakefile.yaml
+.snakemake

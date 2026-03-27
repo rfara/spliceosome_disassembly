@@ -13,7 +13,7 @@ controller_time="${CONTROLLER_TIME:-2-00:00:00}"
 controller_log_dir="${CONTROLLER_LOG_DIR:-${repo_root}/shortread/snake/logs/controller}"
 conda_env_name="${CONDA_ENV_NAME:-spliceosome-shortread}"
 snakemake_jobs="${SNAKEMAKE_JOBS:-50}"
-snakemake_cores="${SNAKEMAKE_CORES:-200}"
+snakemake_cores="${SNAKEMAKE_CORES:-400}"
 snakemake_latency_wait="${SNAKEMAKE_LATENCY_WAIT:-60}"
 
 mkdir -p "${controller_log_dir}"
