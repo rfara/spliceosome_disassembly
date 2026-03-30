@@ -4,3 +4,7 @@ shortread/snake/logs
 shortread/snake/benchmarks
 shortread/snake/example_snakefile.yaml
 .snakemake
+__pycache__/
+*.py[cod]
+*.nbc
+*.nbi
