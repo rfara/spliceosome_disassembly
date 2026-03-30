@@ -19,7 +19,6 @@ dependencies:
   - numba=0.61
   - matplotlib-base=3.9
   - intervaltree=3.1.0
-  - qualimap=2.3
   - pigz=2.8
   - git
   - gh

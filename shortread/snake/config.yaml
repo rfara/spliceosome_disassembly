@@ -105,11 +105,6 @@ branchpoint_analysis:
   relative_feature_three_prime_window: 20
   relative_feature_residual_quantile_fraction: 0.1
 
-qualimap:
-  java_mem: 16G
-  slurm_mem: 24G
-  protocol: non-strand-specific
-
 slurm:
   time_limits:
     short: "08:00:00"

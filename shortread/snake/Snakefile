@@ -219,10 +219,6 @@ BAM_QC_STAGES = {
     "star": results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
     "dedup": results_path("dedup", "{sample}.dedup.bam"),
 }
-QUALIMAP_RNASEQ_STAGES = {
-    "star": BAM_QC_STAGES["star"],
-    "dedup": BAM_QC_STAGES["dedup"],
-}
 
 
 def bowtie2_index_outputs(prefix):
@@ -240,16 +236,6 @@ def sample_fastq_r2(wildcards):
     if "_R1." in r1:
         return repo_path(r1.replace("_R1.", "_R2."))
     raise ValueError(f"Could not derive R2 path from R1 path: {r1}")
-
-
-def qualimap_bam_index(wildcards):
-    if wildcards.stage == "star":
-        return results_path("star", f"{wildcards.sample}.Aligned.sortedByCoord.out.bam.bai")
-    if wildcards.stage == "dedup":
-        return results_path("dedup", f"{wildcards.sample}.dedup.bam.bai")
-    raise ValueError(f"Qualimap QC is not configured for stage: {wildcards.stage}")
-
-
 def sample_condition(sample):
     sample_conditions = BRANCHPOINT_CFG.get("sample_conditions", {})
     if sample in sample_conditions:
@@ -400,8 +386,6 @@ WORKFLOW_DIRS = [
     results_path("qc", "rna_content"),
     results_path("qc", "star_unmapped"),
     results_path("qc", "snrna_counts"),
-    results_path("qc", "qualimap", "star"),
-    results_path("qc", "qualimap", "dedup"),
     results_path("tmp", "premap"),
     results_path("tmp", "trim"),
     results_path("tmp", "umi_dedup"),
@@ -419,7 +403,6 @@ WORKFLOW_DIRS = [
     log_path("qc_bam"),
     log_path("qc_rna_content"),
     log_path("qc_snrna_counts"),
-    log_path("qc_qualimap"),
     log_path("branchpoints_reference"),
     log_path("branchpoints_quantify"),
     log_path("branchpoints_aggregate"),
@@ -441,7 +424,6 @@ WORKFLOW_DIRS = [
     benchmark_path("qc_bam"),
     benchmark_path("qc_rna_content"),
     benchmark_path("qc_snrna_counts"),
-    benchmark_path("qc_qualimap"),
     benchmark_path("branchpoints_reference"),
     benchmark_path("branchpoints_quantify"),
     benchmark_path("branchpoints_aggregate"),
@@ -475,8 +457,6 @@ rule all:
         expand(results_path("qc", "bam", "{stage}", "{sample}.flagstat.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
         expand(results_path("qc", "bam", "{stage}", "{sample}.stats.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
         expand(results_path("qc", "snrna_counts", "{sample}.snrna_counts.tsv"), sample=SAMPLES),
-        expand(results_path("qc", "qualimap", "{stage}", "{sample}", "qualimapReport.html"), sample=SAMPLES, stage=QUALIMAP_RNASEQ_STAGES.keys()),
-        expand(results_path("qc", "qualimap", "{stage}", "{sample}", "rnaseq_qc_results.txt"), sample=SAMPLES, stage=QUALIMAP_RNASEQ_STAGES.keys()),
         BRANCHPOINT_REFERENCE,
         expand(BRANCHPOINT_SAMPLE_METAPROFILE, sample=SAMPLES),
         expand(BRANCHPOINT_SAMPLE_SUMMARY, sample=SAMPLES),
@@ -1971,50 +1951,3 @@ rule count_snrna_premap_reads:
           > {log} 2>&1
         """
 
-
-rule qualimap_rnaseq_qc:
-    input:
-        init=INIT_SENTINEL,
-        bam=lambda wildcards: QUALIMAP_RNASEQ_STAGES[wildcards.stage].format(sample=wildcards.sample),
-        bai=qualimap_bam_index,
-        gtf=repo_path(config["references"]["genome_gtf"])
-    output:
-        html=results_path("qc", "qualimap", "{stage}", "{sample}", "qualimapReport.html"),
-        summary=results_path("qc", "qualimap", "{stage}", "{sample}", "rnaseq_qc_results.txt")
-    log:
-        log_path("qc_qualimap", "{stage}.{sample}.log")
-    benchmark:
-        benchmark_path("qc_qualimap", "{stage}.{sample}.tsv")
-    threads: 1
-    wildcard_constraints:
-        stage="star|dedup"
-    conda:
-        str(ENV_YAML)
-    params:
-        outdir=lambda wildcards: results_path("qc", "qualimap", wildcards.stage, wildcards.sample),
-        java_mem=config["qualimap"]["java_mem"],
-        protocol=config["qualimap"]["protocol"],
-        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_qualimap", f"{wildcards.stage}.{wildcards.sample}.tsv")).parent),
-        cluster=lambda wildcards: slurm_cluster_args(
-            "m_medium",
-            config["qualimap"]["slurm_mem"],
-            f"qualimap_{wildcards.stage}",
-            log_path("slurm", f"qualimap.{wildcards.stage}.{wildcards.sample}.%A.log"),
-            1,
-        )
-    shell:
-        r"""
-        set -euo pipefail
-        mkdir -p "{params.outdir}" "$(dirname {log})" "{params.benchmark_dir}"
-        unset DISPLAY
-        export JAVA_OPTS="-Djava.awt.headless=true"
-        qualimap rnaseq \
-          --java-mem-size={params.java_mem} \
-          -bam {input.bam} \
-          -gtf {input.gtf} \
-          -outdir {params.outdir} \
-          -outformat HTML \
-          -p {params.protocol} \
-          -pe \
-          > {log} 2>&1
-        """

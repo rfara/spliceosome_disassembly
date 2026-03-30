@@ -13,9 +13,8 @@ This Snakemake workflow processes paired-end RNA-seq reads through:
 9. `samtools flagstat` and `samtools stats` on produced BAMs
 10. a per-reference snRNA pre-map count table with mapped read and fragment counts
 11. a per-sample RNA-content table combining `rRNA` pre-map, `snRNA` pre-map, and undeduplicated genomic reads
-12. `Qualimap RNA-seq QC` on indexed genome-aligned and deduplicated BAMs
-13. BAM indexing with `samtools index`
-14. STAR-unmapped read diagnostics, including `FastQC` and a summary table
+12. BAM indexing with `samtools index`
+13. STAR-unmapped read diagnostics, including `FastQC` and a summary table
 
 The workflow files and outputs live under `shortread/snake`.
 

@@ -5,6 +5,7 @@ import collections
 import gzip
 import pickle
 import shutil
+import signal
 import subprocess
 import sys
 
@@ -69,6 +70,21 @@ LNC_RNA_TYPES = {
     "non_coding",
     "bidirectional_promoter_lncrna",
 }
+
+ANNOTATION_CATEGORIES = (
+    "snoRNA",
+    "scaRNA",
+    "miRNA",
+    "tRNA",
+    "ribozyme",
+    "vaultRNA",
+    "misc_RNA",
+    "snRNA",
+    "lncRNA",
+    "protein_coding_intron",
+    "protein_coding_exon",
+    "pseudogene",
+)
 
 
 def parse_args():
@@ -236,8 +252,8 @@ def parse_gtf(gtf_path):
         tree.merge_overlaps(strict=False)
 
     frozen_category_trees = {
-        category: dict(chrom_trees)
-        for category, chrom_trees in category_trees.items()
+        category: dict(category_trees[category])
+        for category in ANNOTATION_CATEGORIES
     }
     frozen_annotated_gene_trees = dict(annotated_gene_trees)
 
@@ -246,7 +262,20 @@ def parse_gtf(gtf_path):
 
 def load_reference_cache(path):
     with open(path, "rb") as handle:
-        return pickle.load(handle)
+        category_trees, annotated_gene_trees = pickle.load(handle)
+
+    missing_categories = [
+        category for category in ANNOTATION_CATEGORIES
+        if category not in category_trees
+    ]
+    if missing_categories:
+        missing_text = ", ".join(sorted(missing_categories))
+        raise ValueError(
+            f"RNA-content reference cache at {path} is stale or incompatible; "
+            f"missing categories: {missing_text}. Rebuild the cache."
+        )
+
+    return category_trees, annotated_gene_trees
 
 
 def tree_has_overlap(tree_by_chrom, chrom, start, end):
@@ -268,20 +297,7 @@ def classify_fragment(alignments, category_trees, annotated_gene_trees):
         for start, end in blocks:
             if not annotated and tree_has_overlap(annotated_gene_trees, chrom, start, end):
                 annotated = True
-            for category in (
-                "snoRNA",
-                "scaRNA",
-                "miRNA",
-                "tRNA",
-                "ribozyme",
-                "vaultRNA",
-                "misc_RNA",
-                "snRNA",
-                "lncRNA",
-                "protein_coding_intron",
-                "protein_coding_exon",
-                "pseudogene",
-            ):
+            for category in ANNOTATION_CATEGORIES:
                 if tree_has_overlap(category_trees[category], chrom, start, end):
                     overlaps.add(category)
 
@@ -320,7 +336,7 @@ def iter_name_collated_groups(star_bam_path, threads):
         if process.stdout is not None:
             process.stdout.close()
         return_code = process.wait()
-        if return_code != 0:
+        if return_code not in (0, -signal.SIGPIPE):
             raise subprocess.CalledProcessError(return_code, command)
 
 
