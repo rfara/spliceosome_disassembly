@@ -66,6 +66,126 @@ BRANCHPOINT_COMBINED_PLOT_PNG = results_path("branchpoints", "combined", "branch
 BRANCHPOINT_COMBINED_PLOT_PDF = results_path("branchpoints", "combined", "branchpoint_5prime_metaprofile.pdf")
 BRANCHPOINT_COMBINED_COVERAGE_PLOT_PNG = results_path("branchpoints", "combined", "branchpoint_coverage_metaprofile.png")
 BRANCHPOINT_COMBINED_COVERAGE_PLOT_PDF = results_path("branchpoints", "combined", "branchpoint_coverage_metaprofile.pdf")
+BRANCHPOINT_READTHROUGH_SAMPLE_METAPROFILE = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "samples",
+    "{sample}.metaprofile.tsv",
+)
+BRANCHPOINT_READTHROUGH_SAMPLE_SUMMARY = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "samples",
+    "{sample}.summary.tsv",
+)
+BRANCHPOINT_READTHROUGH_SAMPLE_SITE_COUNTS = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "samples",
+    "{sample}.site_counts.tsv.gz",
+)
+BRANCHPOINT_READTHROUGH_SAMPLE_POSITION_COUNTS = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "samples",
+    "{sample}.position_counts.tsv.gz",
+)
+BRANCHPOINT_READTHROUGH_COMBINED_METAPROFILE_BY_SAMPLE = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "combined",
+    "metaprofile.by_sample.tsv",
+)
+BRANCHPOINT_READTHROUGH_COMBINED_METAPROFILE_BY_CONDITION = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "combined",
+    "metaprofile.by_condition.tsv",
+)
+BRANCHPOINT_READTHROUGH_COMBINED_SUMMARY_BY_SAMPLE = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "combined",
+    "summary.by_sample.tsv",
+)
+BRANCHPOINT_READTHROUGH_COMBINED_SUMMARY_BY_CONDITION = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "combined",
+    "summary.by_condition.tsv",
+)
+BRANCHPOINT_READTHROUGH_COMBINED_SHARED_INTRONS = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "combined",
+    "shared_introns.tsv",
+)
+BRANCHPOINT_READTHROUGH_COMBINED_PLOT_PNG = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "combined",
+    "branchpoint_readthrough_event_metaprofile.png",
+)
+BRANCHPOINT_READTHROUGH_COMBINED_PLOT_PDF = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "combined",
+    "branchpoint_readthrough_event_metaprofile.pdf",
+)
+BRANCHPOINT_READTHROUGH_FILTERED_METAPROFILE_BY_SAMPLE = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "filtered",
+    "metaprofile.by_sample.tsv",
+)
+BRANCHPOINT_READTHROUGH_FILTERED_METAPROFILE_BY_CONDITION = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "filtered",
+    "metaprofile.by_condition.tsv",
+)
+BRANCHPOINT_READTHROUGH_FILTERED_SUMMARY_BY_SAMPLE = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "filtered",
+    "summary.by_sample.tsv",
+)
+BRANCHPOINT_READTHROUGH_FILTERED_SUMMARY_BY_CONDITION = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "filtered",
+    "summary.by_condition.tsv",
+)
+BRANCHPOINT_READTHROUGH_FILTERED_SHARED_INTRONS = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "filtered",
+    "shared_introns.tsv",
+)
+BRANCHPOINT_READTHROUGH_FILTERED_BLACKLIST = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "filtered",
+    "blacklist.tsv",
+)
+BRANCHPOINT_READTHROUGH_FILTERED_FILTER_SUMMARY = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "filtered",
+    "filter_summary.tsv",
+)
+BRANCHPOINT_READTHROUGH_FILTERED_PLOT_PNG = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "filtered",
+    "branchpoint_readthrough_event_metaprofile.filtered.png",
+)
+BRANCHPOINT_READTHROUGH_FILTERED_PLOT_PDF = results_path(
+    "branchpoints",
+    "readthrough_events",
+    "filtered",
+    "branchpoint_readthrough_event_metaprofile.filtered.pdf",
+)
 BRANCHPOINT_HETEROGENEITY_SUMMARY_BY_SAMPLE = results_path("branchpoints", "heterogeneity", "summary.by_sample.tsv")
 BRANCHPOINT_HETEROGENEITY_SUMMARY_BY_CONDITION = results_path("branchpoints", "heterogeneity", "summary.by_condition.tsv")
 BRANCHPOINT_HETEROGENEITY_CONDITION_INTRONS = results_path("branchpoints", "heterogeneity", "condition_introns.tsv.gz")
@@ -81,6 +201,17 @@ BRANCHPOINT_SEQUENCE_CONTEXT_ENRICHMENT = results_path("branchpoints", "sequence
 BRANCHPOINT_SEQUENCE_CONTEXT_MODEL_SUMMARY = results_path("branchpoints", "sequence_context", "model_summary.tsv")
 BRANCHPOINT_SEQUENCE_CONTEXT_PLOT_PNG = results_path("branchpoints", "sequence_context", "branchpoint_sequence_context.png")
 BRANCHPOINT_SEQUENCE_CONTEXT_PLOT_PDF = results_path("branchpoints", "sequence_context", "branchpoint_sequence_context.pdf")
+BRANCHPOINT_RELATIVE_FEATURES_SUMMARY = results_path("branchpoints", "relative_branching_features", "summary.tsv")
+BRANCHPOINT_RELATIVE_FEATURES_SHARED_INTRONS = results_path("branchpoints", "relative_branching_features", "shared_introns.tsv.gz")
+BRANCHPOINT_RELATIVE_FEATURES_MODEL_SUMMARY = results_path("branchpoints", "relative_branching_features", "model_summary.tsv")
+BRANCHPOINT_RELATIVE_FEATURES_NUMERIC = results_path("branchpoints", "relative_branching_features", "numeric_feature_summary.tsv")
+BRANCHPOINT_RELATIVE_FEATURES_BP_EFFECTS = results_path("branchpoints", "relative_branching_features", "bp_sequence_effects.tsv")
+BRANCHPOINT_RELATIVE_FEATURES_BP_ENRICHMENT = results_path("branchpoints", "relative_branching_features", "bp_sequence_enrichment.tsv")
+BRANCHPOINT_RELATIVE_FEATURES_GROUP_COMPARISON = results_path("branchpoints", "relative_branching_features", "feature_group_comparison.tsv")
+BRANCHPOINT_RELATIVE_FEATURES_PLOT_PNG = results_path("branchpoints", "relative_branching_features", "relative_branching_features.png")
+BRANCHPOINT_RELATIVE_FEATURES_PLOT_PDF = results_path("branchpoints", "relative_branching_features", "relative_branching_features.pdf")
+BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PNG = results_path("branchpoints", "relative_branching_features", "feature_distributions.png")
+BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PDF = results_path("branchpoints", "relative_branching_features", "feature_distributions.pdf")
 BAM_QC_STAGES = {
     "premap_rrna": results_path("premap_rrna", "{sample}.rrna.bam"),
     "premap_snrna": results_path("premap_snrna", "{sample}.snrna.bam"),
@@ -248,8 +379,12 @@ WORKFLOW_DIRS = [
     results_path("branchpoints", "reference"),
     results_path("branchpoints", "samples"),
     results_path("branchpoints", "combined"),
+    results_path("branchpoints", "readthrough_events", "samples"),
+    results_path("branchpoints", "readthrough_events", "combined"),
+    results_path("branchpoints", "readthrough_events", "filtered"),
     results_path("branchpoints", "heterogeneity"),
     results_path("branchpoints", "sequence_context"),
+    results_path("branchpoints", "relative_branching_features"),
     results_path("qc", "fastqc", "trimmed", "r1"),
     results_path("qc", "fastqc", "trimmed", "r2"),
     results_path("qc", "fastqc", "umi", "r1"),
@@ -285,6 +420,9 @@ WORKFLOW_DIRS = [
     log_path("branchpoints_reference"),
     log_path("branchpoints_quantify"),
     log_path("branchpoints_aggregate"),
+    log_path("branchpoints_readthrough_quantify"),
+    log_path("branchpoints_readthrough_aggregate"),
+    log_path("branchpoints_readthrough_filtered_aggregate"),
     log_path("slurm"),
     benchmark_path("reference"),
     benchmark_path("trim"),
@@ -303,6 +441,9 @@ WORKFLOW_DIRS = [
     benchmark_path("branchpoints_reference"),
     benchmark_path("branchpoints_quantify"),
     benchmark_path("branchpoints_aggregate"),
+    benchmark_path("branchpoints_readthrough_quantify"),
+    benchmark_path("branchpoints_readthrough_aggregate"),
+    benchmark_path("branchpoints_readthrough_filtered_aggregate"),
 ]
 
 
@@ -344,6 +485,26 @@ rule all:
         BRANCHPOINT_COMBINED_SHARED_INTRONS,
         BRANCHPOINT_COMBINED_PLOT_PNG,
         BRANCHPOINT_COMBINED_PLOT_PDF,
+        expand(BRANCHPOINT_READTHROUGH_SAMPLE_METAPROFILE, sample=SAMPLES),
+        expand(BRANCHPOINT_READTHROUGH_SAMPLE_SUMMARY, sample=SAMPLES),
+        expand(BRANCHPOINT_READTHROUGH_SAMPLE_SITE_COUNTS, sample=SAMPLES),
+        expand(BRANCHPOINT_READTHROUGH_SAMPLE_POSITION_COUNTS, sample=SAMPLES),
+        BRANCHPOINT_READTHROUGH_COMBINED_METAPROFILE_BY_SAMPLE,
+        BRANCHPOINT_READTHROUGH_COMBINED_METAPROFILE_BY_CONDITION,
+        BRANCHPOINT_READTHROUGH_COMBINED_SUMMARY_BY_SAMPLE,
+        BRANCHPOINT_READTHROUGH_COMBINED_SUMMARY_BY_CONDITION,
+        BRANCHPOINT_READTHROUGH_COMBINED_SHARED_INTRONS,
+        BRANCHPOINT_READTHROUGH_COMBINED_PLOT_PNG,
+        BRANCHPOINT_READTHROUGH_COMBINED_PLOT_PDF,
+        BRANCHPOINT_READTHROUGH_FILTERED_METAPROFILE_BY_SAMPLE,
+        BRANCHPOINT_READTHROUGH_FILTERED_METAPROFILE_BY_CONDITION,
+        BRANCHPOINT_READTHROUGH_FILTERED_SUMMARY_BY_SAMPLE,
+        BRANCHPOINT_READTHROUGH_FILTERED_SUMMARY_BY_CONDITION,
+        BRANCHPOINT_READTHROUGH_FILTERED_SHARED_INTRONS,
+        BRANCHPOINT_READTHROUGH_FILTERED_BLACKLIST,
+        BRANCHPOINT_READTHROUGH_FILTERED_FILTER_SUMMARY,
+        BRANCHPOINT_READTHROUGH_FILTERED_PLOT_PNG,
+        BRANCHPOINT_READTHROUGH_FILTERED_PLOT_PDF,
 
 
 rule initialize_workdirs:
@@ -980,7 +1141,8 @@ rule classify_rna_content:
 rule deduplicate_bam:
     input:
         init=INIT_SENTINEL,
-        bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam")
+        bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
+        bai=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam.bai")
     output:
         bam=results_path("dedup", "{sample}.dedup.bam")
     log:
@@ -998,8 +1160,8 @@ rule deduplicate_bam:
         extra=config["dedup"].get("extra", ""),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("dedup", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
-            "m_medium",
-            "128G",
+            "c_medium",
+            "64G",
             "umi_dedup",
             log_path("slurm", f"umi_dedup.{wildcards.sample}.%A.log"),
             config["resources"]["dedup_sort_threads"],
@@ -1014,7 +1176,7 @@ rule deduplicate_bam:
           --temp-dir={params.temp_dir} \
           --method={params.method} \
           --paired \
-              --multimapping-detection-method={params.multimap_tag} \
+          --multimapping-detection-method={params.multimap_tag} \
           --spliced-is-unique \
           --unmapped-reads=discard \
           --no-sort-output \
@@ -1245,6 +1407,233 @@ rule aggregate_branchpoint_profiles:
         """
 
 
+rule quantify_branchpoint_readthrough_events:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("dedup", "{sample}.dedup.bam"),
+        bai=results_path("dedup", "{sample}.dedup.bam.bai"),
+        reference=BRANCHPOINT_REFERENCE
+    output:
+        site_counts=BRANCHPOINT_READTHROUGH_SAMPLE_SITE_COUNTS,
+        position_counts=BRANCHPOINT_READTHROUGH_SAMPLE_POSITION_COUNTS,
+        metaprofile=BRANCHPOINT_READTHROUGH_SAMPLE_METAPROFILE,
+        summary=BRANCHPOINT_READTHROUGH_SAMPLE_SUMMARY
+    log:
+        log_path("branchpoints_readthrough_quantify", "{sample}.log")
+    benchmark:
+        benchmark_path("branchpoints_readthrough_quantify", "{sample}.tsv")
+    threads: config["resources"].get("branchpoint_readthrough_quant_threads", 1)
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "quantify_branchpoint_readthrough_events.py").resolve()),
+        condition=lambda wildcards: sample_condition(wildcards.sample),
+        anchor_window=BRANCHPOINT_CFG["anchor_window"],
+        profile_upstream=BRANCHPOINT_CFG.get("readthrough_profile_upstream", BRANCHPOINT_CFG["profile_upstream"]),
+        profile_downstream=BRANCHPOINT_CFG.get(
+            "readthrough_profile_downstream",
+            BRANCHPOINT_CFG["profile_downstream"],
+        ),
+        benchmark_dir=lambda wildcards: str(
+            Path(benchmark_path("branchpoints_readthrough_quantify", f"{wildcards.sample}.tsv")).parent
+        ),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "16G",
+            "bp_rte_quant",
+            log_path("slurm", f"bp_rte_quant.{wildcards.sample}.%A.log"),
+            config["resources"].get("branchpoint_readthrough_quant_threads", 1),
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.site_counts})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --bam {input.bam} \
+          --reference {input.reference} \
+          --sample {wildcards.sample} \
+          --condition {params.condition} \
+          --anchor-window {params.anchor_window} \
+          --profile-upstream {params.profile_upstream} \
+          --profile-downstream {params.profile_downstream} \
+          --output-site-counts {output.site_counts} \
+          --output-position-counts {output.position_counts} \
+          --output-metaprofile {output.metaprofile} \
+          --output-summary {output.summary} \
+          > {log} 2>&1
+        """
+
+
+rule aggregate_branchpoint_readthrough_events:
+    input:
+        init=INIT_SENTINEL,
+        summaries=expand(BRANCHPOINT_READTHROUGH_SAMPLE_SUMMARY, sample=SAMPLES),
+        site_counts=expand(BRANCHPOINT_READTHROUGH_SAMPLE_SITE_COUNTS, sample=SAMPLES),
+        position_counts=expand(BRANCHPOINT_READTHROUGH_SAMPLE_POSITION_COUNTS, sample=SAMPLES)
+    output:
+        metaprofile_by_sample=BRANCHPOINT_READTHROUGH_COMBINED_METAPROFILE_BY_SAMPLE,
+        metaprofile_by_condition=BRANCHPOINT_READTHROUGH_COMBINED_METAPROFILE_BY_CONDITION,
+        summary_by_sample=BRANCHPOINT_READTHROUGH_COMBINED_SUMMARY_BY_SAMPLE,
+        summary_by_condition=BRANCHPOINT_READTHROUGH_COMBINED_SUMMARY_BY_CONDITION,
+        shared_introns=BRANCHPOINT_READTHROUGH_COMBINED_SHARED_INTRONS,
+        plot_png=BRANCHPOINT_READTHROUGH_COMBINED_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_READTHROUGH_COMBINED_PLOT_PDF
+    log:
+        log_path("branchpoints_readthrough_aggregate", "combined.log")
+    benchmark:
+        benchmark_path("branchpoints_readthrough_aggregate", "combined.tsv")
+    threads: config["resources"].get("branchpoint_readthrough_aggregate_threads", 1)
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "aggregate_branchpoint_readthrough_events.py").resolve()),
+        summary_args=lambda wildcards, input: " ".join(
+            f"--summary {shlex.quote(path)}" for path in input.summaries
+        ),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        position_count_args=lambda wildcards, input: " ".join(
+            f"--position-counts {shlex.quote(path)}" for path in input.position_counts
+        ),
+        shared_min_reads=BRANCHPOINT_CFG.get(
+            "readthrough_shared_min_reads_all_samples",
+            BRANCHPOINT_CFG["shared_min_reads_all_samples"],
+        ),
+        plot_upstream=BRANCHPOINT_CFG.get("readthrough_plot_upstream", 40),
+        plot_downstream=BRANCHPOINT_CFG.get("readthrough_plot_downstream", 10),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_readthrough_aggregate", "combined.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bp_rte_agg",
+            log_path("slurm", "bp_rte_agg.%A.log"),
+            config["resources"].get("branchpoint_readthrough_aggregate_threads", 1),
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.metaprofile_by_sample})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.summary_args} \
+          {params.site_count_args} \
+          {params.position_count_args} \
+          --shared-min-reads {params.shared_min_reads} \
+          --plot-upstream {params.plot_upstream} \
+          --plot-downstream {params.plot_downstream} \
+          --output-metaprofile-by-sample {output.metaprofile_by_sample} \
+          --output-metaprofile-by-condition {output.metaprofile_by_condition} \
+          --output-summary-by-sample {output.summary_by_sample} \
+          --output-summary-by-condition {output.summary_by_condition} \
+          --output-shared-introns {output.shared_introns} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule aggregate_branchpoint_readthrough_events_filtered:
+    input:
+        init=INIT_SENTINEL,
+        summaries=expand(BRANCHPOINT_READTHROUGH_SAMPLE_SUMMARY, sample=SAMPLES),
+        site_counts=expand(BRANCHPOINT_READTHROUGH_SAMPLE_SITE_COUNTS, sample=SAMPLES),
+        position_counts=expand(BRANCHPOINT_READTHROUGH_SAMPLE_POSITION_COUNTS, sample=SAMPLES)
+    output:
+        metaprofile_by_sample=BRANCHPOINT_READTHROUGH_FILTERED_METAPROFILE_BY_SAMPLE,
+        metaprofile_by_condition=BRANCHPOINT_READTHROUGH_FILTERED_METAPROFILE_BY_CONDITION,
+        summary_by_sample=BRANCHPOINT_READTHROUGH_FILTERED_SUMMARY_BY_SAMPLE,
+        summary_by_condition=BRANCHPOINT_READTHROUGH_FILTERED_SUMMARY_BY_CONDITION,
+        shared_introns=BRANCHPOINT_READTHROUGH_FILTERED_SHARED_INTRONS,
+        blacklist=BRANCHPOINT_READTHROUGH_FILTERED_BLACKLIST,
+        filter_summary=BRANCHPOINT_READTHROUGH_FILTERED_FILTER_SUMMARY,
+        plot_png=BRANCHPOINT_READTHROUGH_FILTERED_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_READTHROUGH_FILTERED_PLOT_PDF
+    log:
+        log_path("branchpoints_readthrough_filtered_aggregate", "filtered.log")
+    benchmark:
+        benchmark_path("branchpoints_readthrough_filtered_aggregate", "filtered.tsv")
+    threads: config["resources"].get("branchpoint_readthrough_aggregate_threads", 1)
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "aggregate_branchpoint_readthrough_events.py").resolve()),
+        summary_args=lambda wildcards, input: " ".join(
+            f"--summary {shlex.quote(path)}" for path in input.summaries
+        ),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        position_count_args=lambda wildcards, input: " ".join(
+            f"--position-counts {shlex.quote(path)}" for path in input.position_counts
+        ),
+        shared_min_reads=BRANCHPOINT_CFG.get(
+            "readthrough_shared_min_reads_all_samples",
+            BRANCHPOINT_CFG["shared_min_reads_all_samples"],
+        ),
+        plot_upstream=BRANCHPOINT_CFG.get("readthrough_plot_upstream", 40),
+        plot_downstream=BRANCHPOINT_CFG.get("readthrough_plot_downstream", 10),
+        blacklist_min_samples=BRANCHPOINT_CFG.get("readthrough_blacklist_min_samples", 2),
+        blacklist_min_traversing=BRANCHPOINT_CFG.get("readthrough_blacklist_min_traversing_fragments", 20),
+        blacklist_deletion_percent=BRANCHPOINT_CFG.get("readthrough_blacklist_deletion_percent_threshold", 0.5),
+        blacklist_insertion_percent=BRANCHPOINT_CFG.get("readthrough_blacklist_insertion_percent_threshold", 0.5),
+        max_total_indel_percent=BRANCHPOINT_CFG.get("readthrough_max_total_indel_percent_any_sample", 0.5),
+        blacklist_single_offset_min_samples=BRANCHPOINT_CFG.get(
+            "readthrough_blacklist_single_offset_min_samples",
+            2,
+        ),
+        blacklist_single_offset_min_coverage=BRANCHPOINT_CFG.get(
+            "readthrough_blacklist_single_offset_min_coverage",
+            20,
+        ),
+        blacklist_single_offset_deletion_percent=BRANCHPOINT_CFG.get(
+            "readthrough_blacklist_single_offset_deletion_percent_threshold",
+            10.0,
+        ),
+        blacklist_single_offset_insertion_percent=BRANCHPOINT_CFG.get(
+            "readthrough_blacklist_single_offset_insertion_percent_threshold",
+            10.0,
+        ),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_readthrough_filtered_aggregate", "filtered.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bp_rte_filt",
+            log_path("slurm", "bp_rte_filt.%A.log"),
+            config["resources"].get("branchpoint_readthrough_aggregate_threads", 1),
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.metaprofile_by_sample})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.summary_args} \
+          {params.site_count_args} \
+          {params.position_count_args} \
+          --shared-min-reads {params.shared_min_reads} \
+          --plot-upstream {params.plot_upstream} \
+          --plot-downstream {params.plot_downstream} \
+          --blacklist-min-samples {params.blacklist_min_samples} \
+          --blacklist-min-traversing-fragments {params.blacklist_min_traversing} \
+          --blacklist-deletion-percent-threshold {params.blacklist_deletion_percent} \
+          --blacklist-insertion-percent-threshold {params.blacklist_insertion_percent} \
+          --max-total-indel-percent-any-sample {params.max_total_indel_percent} \
+          --blacklist-single-offset-min-samples {params.blacklist_single_offset_min_samples} \
+          --blacklist-single-offset-min-coverage {params.blacklist_single_offset_min_coverage} \
+          --blacklist-single-offset-deletion-percent-threshold {params.blacklist_single_offset_deletion_percent} \
+          --blacklist-single-offset-insertion-percent-threshold {params.blacklist_single_offset_insertion_percent} \
+          --output-metaprofile-by-sample {output.metaprofile_by_sample} \
+          --output-metaprofile-by-condition {output.metaprofile_by_condition} \
+          --output-summary-by-sample {output.summary_by_sample} \
+          --output-summary-by-condition {output.summary_by_condition} \
+          --output-shared-introns {output.shared_introns} \
+          --output-blacklist {output.blacklist} \
+          --output-filter-summary {output.filter_summary} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
+          > {log} 2>&1
+        """
+
+
 rule analyze_branchpoint_heterogeneity:
     input:
         init=INIT_SENTINEL,
@@ -1382,6 +1771,94 @@ rule analyze_branchpoint_sequence_context:
           --output-model-summary {output.model_summary} \
           --output-plot-png {output.plot_png} \
           --output-plot-pdf {output.plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_relative_branching_features:
+    input:
+        init=INIT_SENTINEL,
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES)
+    output:
+        summary=BRANCHPOINT_RELATIVE_FEATURES_SUMMARY,
+        shared_introns=BRANCHPOINT_RELATIVE_FEATURES_SHARED_INTRONS,
+        model_summary=BRANCHPOINT_RELATIVE_FEATURES_MODEL_SUMMARY,
+        numeric_feature_summary=BRANCHPOINT_RELATIVE_FEATURES_NUMERIC,
+        bp_sequence_effects=BRANCHPOINT_RELATIVE_FEATURES_BP_EFFECTS,
+        bp_sequence_enrichment=BRANCHPOINT_RELATIVE_FEATURES_BP_ENRICHMENT,
+        group_comparison=BRANCHPOINT_RELATIVE_FEATURES_GROUP_COMPARISON,
+        plot_png=BRANCHPOINT_RELATIVE_FEATURES_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_RELATIVE_FEATURES_PLOT_PDF,
+        feature_distribution_plot_png=BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PNG,
+        feature_distribution_plot_pdf=BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PDF
+    log:
+        log_path("relative_branching_features", "analysis.log")
+    benchmark:
+        benchmark_path("relative_branching_features", "analysis.tsv")
+    threads: config["resources"].get("branchpoint_relative_feature_threads", 1)
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_relative_branching_features.py").resolve()),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        genome_fasta=repo_path(
+            BRANCHPOINT_CFG.get("relative_feature_genome_fasta", BRANCHPOINT_CFG["sequence_context_genome_fasta"])
+        ),
+        signal_field=BRANCHPOINT_CFG.get("relative_feature_signal_field", "zero_or_plus_one_branchpoint_fragments"),
+        control_condition=BRANCHPOINT_CFG.get("relative_feature_control_condition", "ILS"),
+        query_condition=BRANCHPOINT_CFG.get("relative_feature_query_condition", "DIS"),
+        control_min_reads=BRANCHPOINT_CFG.get("relative_feature_control_min_reads", 20),
+        query_min_reads=BRANCHPOINT_CFG.get("relative_feature_query_min_reads", 20),
+        require_bp_center_base=BRANCHPOINT_CFG.get("relative_feature_require_bp_center_base", "A"),
+        require_bp_center_base_arg=(
+            f"--require-bp-center-base {shlex.quote(str(BRANCHPOINT_CFG.get('relative_feature_require_bp_center_base', '')))}"
+            if BRANCHPOINT_CFG.get("relative_feature_require_bp_center_base", "A")
+            else ""
+        ),
+        bp_upstream=BRANCHPOINT_CFG.get("relative_feature_bp_upstream", 5),
+        bp_downstream=BRANCHPOINT_CFG.get("relative_feature_bp_downstream", 5),
+        intron_gc_window=BRANCHPOINT_CFG.get("relative_feature_intron_gc_window", 100),
+        three_prime_window=BRANCHPOINT_CFG.get("relative_feature_three_prime_window", 20),
+        residual_quantile_fraction=BRANCHPOINT_CFG.get("relative_feature_residual_quantile_fraction", 0.1),
+        benchmark_dir=str(Path(benchmark_path("relative_branching_features", "analysis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "12G",
+            "bp_relfeat",
+            log_path("slurm", "bp_relfeat.%A.log"),
+            config["resources"].get("branchpoint_relative_feature_threads", 1),
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.site_count_args} \
+          --genome-fasta {params.genome_fasta} \
+          --signal-field {params.signal_field} \
+          --control-condition {params.control_condition} \
+          --query-condition {params.query_condition} \
+          --control-min-reads {params.control_min_reads} \
+          --query-min-reads {params.query_min_reads} \
+          {params.require_bp_center_base_arg} \
+          --bp-upstream {params.bp_upstream} \
+          --bp-downstream {params.bp_downstream} \
+          --intron-gc-window {params.intron_gc_window} \
+          --three-prime-window {params.three_prime_window} \
+          --residual-quantile-fraction {params.residual_quantile_fraction} \
+          --output-summary {output.summary} \
+          --output-shared-introns {output.shared_introns} \
+          --output-model-summary {output.model_summary} \
+          --output-feature-summary {output.numeric_feature_summary} \
+          --output-bp-sequence-effects {output.bp_sequence_effects} \
+          --output-bp-sequence-enrichment {output.bp_sequence_enrichment} \
+          --output-group-comparison {output.group_comparison} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
+          --output-feature-distribution-plot-png {output.feature_distribution_plot_png} \
+          --output-feature-distribution-plot-pdf {output.feature_distribution_plot_pdf} \
           > {log} 2>&1
         """
 

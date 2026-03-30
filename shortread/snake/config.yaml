@@ -51,7 +51,7 @@ dedup:
   method: directional
   multimapping_detection_method: NH
   samtools_sort_memory: 8G
-  extra: ""
+  extra: "--chimeric-pairs=discard --unpaired-reads=discard"
 
 branchpoint_analysis:
   mane_gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz
@@ -60,6 +60,20 @@ branchpoint_analysis:
   profile_upstream: 100
   profile_downstream: 100
   shared_min_reads_all_samples: 5
+  readthrough_profile_upstream: 100
+  readthrough_profile_downstream: 100
+  readthrough_shared_min_reads_all_samples: 5
+  readthrough_plot_upstream: 40
+  readthrough_plot_downstream: 10
+  readthrough_blacklist_min_samples: 2
+  readthrough_blacklist_min_traversing_fragments: 20
+  readthrough_blacklist_deletion_percent_threshold: 0.5
+  readthrough_blacklist_insertion_percent_threshold: 0.5
+  readthrough_max_total_indel_percent_any_sample: 0.5
+  readthrough_blacklist_single_offset_min_samples: 2
+  readthrough_blacklist_single_offset_min_coverage: 20
+  readthrough_blacklist_single_offset_deletion_percent_threshold: 10.0
+  readthrough_blacklist_single_offset_insertion_percent_threshold: 10.0
   heterogeneity_signal_field: zero_or_plus_one_branchpoint_fragments
   heterogeneity_query_condition: DIS
   heterogeneity_control_condition: ILS
@@ -78,6 +92,18 @@ branchpoint_analysis:
   sequence_context_five_prime_intron_bases: 6
   sequence_context_decile_fraction: 0.1
   sequence_context_require_bp_center_base: A
+  relative_feature_genome_fasta: /Users/rupert.faraway/bio/reference/hs/fa/GRCh38.primary_assembly.genome.fa
+  relative_feature_signal_field: zero_or_plus_one_branchpoint_fragments
+  relative_feature_control_condition: ILS
+  relative_feature_query_condition: DIS
+  relative_feature_control_min_reads: 20
+  relative_feature_query_min_reads: 20
+  relative_feature_require_bp_center_base: A
+  relative_feature_bp_upstream: 5
+  relative_feature_bp_downstream: 5
+  relative_feature_intron_gc_window: 100
+  relative_feature_three_prime_window: 20
+  relative_feature_residual_quantile_fraction: 0.1
 
 qualimap:
   java_mem: 16G
@@ -105,5 +131,8 @@ resources:
   branchpoint_reference_threads: 1
   branchpoint_quant_threads: 1
   branchpoint_aggregate_threads: 1
+  branchpoint_readthrough_quant_threads: 1
+  branchpoint_readthrough_aggregate_threads: 1
   branchpoint_heterogeneity_threads: 1
   branchpoint_sequence_context_threads: 1
+  branchpoint_relative_feature_threads: 1

@@ -105,6 +105,12 @@ There is also an intron-level heterogeneity analysis that tests whether branchpo
 
 The workflow also includes a sequence-context analysis for branchpoint-associated RT arrest. It extracts branchpoint-flanking sequence and the first intronic bases after the 5' splice site, then uses the configured control condition to estimate sequence-dependent RT readthrough versus arrest.
 
+There is also a relative branching feature analysis that uses the configured control condition as a baseline predictor of per-intron branchiness, then asks which intron features and branchpoint-flanking sequence contexts explain branch enrichment or depletion in the configured query condition.
+
+There is also a branchpoint readthrough-event analysis for reads that extend through the selected branchpoint. It keeps the same anchored fragment assignment, restricts to `read1` alignments whose aligned path covers the branchpoint and whose `read1` 5' end lies upstream of it, then uses the `read1` `MD` tag plus CIGAR to profile mismatches, deletions, and insertions separately relative to the branchpoint. The combined comparison is restricted to introns with at least `branchpoint_analysis.readthrough_shared_min_reads_all_samples` traversing reads in every sample, and the metaprofiles report event frequency as a fraction of traversing-read coverage at each offset. The readthrough plots can be cropped independently of the underlying quantification with `branchpoint_analysis.readthrough_plot_upstream` and `branchpoint_analysis.readthrough_plot_downstream`.
+
+The workflow also produces a filtered readthrough replot that blacklists recurrent high-indel introns, excludes loci with extreme total indel burden in any sample, and removes introns with recurrent single-offset indel spikes. The default blacklist is driven by `branchpoint_analysis.readthrough_blacklist_*`, `branchpoint_analysis.readthrough_blacklist_single_offset_*`, and `branchpoint_analysis.readthrough_max_total_indel_percent_any_sample` in `shortread/snake/config.yaml`.
+
 You can run just this analysis from the repository root with:
 
 ```bash
@@ -128,6 +134,24 @@ Main outputs:
 - `shortread/snake/results/branchpoints/combined/summary.by_condition.tsv`
 - `shortread/snake/results/branchpoints/combined/branchpoint_5prime_metaprofile.png`
 - `shortread/snake/results/branchpoints/combined/branchpoint_coverage_metaprofile.png`
+- `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.summary.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.metaprofile.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.site_counts.tsv.gz`
+- `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.position_counts.tsv.gz`
+- `shortread/snake/results/branchpoints/readthrough_events/combined/shared_introns.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/combined/metaprofile.by_sample.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/combined/metaprofile.by_condition.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/combined/summary.by_sample.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/combined/summary.by_condition.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/combined/branchpoint_readthrough_event_metaprofile.png`
+- `shortread/snake/results/branchpoints/readthrough_events/filtered/blacklist.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/filtered/filter_summary.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/filtered/shared_introns.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/filtered/metaprofile.by_sample.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/filtered/metaprofile.by_condition.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/filtered/summary.by_sample.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/filtered/summary.by_condition.tsv`
+- `shortread/snake/results/branchpoints/readthrough_events/filtered/branchpoint_readthrough_event_metaprofile.filtered.png`
 - `shortread/snake/results/branchpoints/heterogeneity/summary.by_sample.tsv`
 - `shortread/snake/results/branchpoints/heterogeneity/summary.by_condition.tsv`
 - `shortread/snake/results/branchpoints/heterogeneity/condition_comparison.summary.tsv`
@@ -137,3 +161,9 @@ Main outputs:
 - `shortread/snake/results/branchpoints/sequence_context/top_bottom_enrichment.tsv`
 - `shortread/snake/results/branchpoints/sequence_context/model_summary.tsv`
 - `shortread/snake/results/branchpoints/sequence_context/branchpoint_sequence_context.png`
+- `shortread/snake/results/branchpoints/relative_branching_features/summary.tsv`
+- `shortread/snake/results/branchpoints/relative_branching_features/model_summary.tsv`
+- `shortread/snake/results/branchpoints/relative_branching_features/numeric_feature_summary.tsv`
+- `shortread/snake/results/branchpoints/relative_branching_features/relative_branching_features.png`
+- `shortread/snake/results/branchpoints/relative_branching_features/feature_group_comparison.tsv`
+- `shortread/snake/results/branchpoints/relative_branching_features/feature_distributions.png`
