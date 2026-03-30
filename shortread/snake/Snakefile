@@ -408,6 +408,7 @@ WORKFLOW_DIRS = [
     log_path("umi"),
     log_path("premap_rrna"),
     log_path("premap_snrna"),
+    log_path("premap_snrna_index"),
     log_path("star"),
     log_path("star_index"),
     log_path("dedup"),
@@ -429,6 +430,7 @@ WORKFLOW_DIRS = [
     benchmark_path("umi"),
     benchmark_path("premap_rrna"),
     benchmark_path("premap_snrna"),
+    benchmark_path("premap_snrna_index"),
     benchmark_path("star"),
     benchmark_path("star_index"),
     benchmark_path("dedup"),
@@ -1249,6 +1251,36 @@ rule index_deduplicated_bam:
         """
 
 
+rule index_snrna_premap_bam:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("premap_snrna", "{sample}.snrna.bam")
+    output:
+        bai=results_path("premap_snrna", "{sample}.snrna.bam.bai")
+    log:
+        log_path("premap_snrna_index", "{sample}.log")
+    benchmark:
+        benchmark_path("premap_snrna_index", "{sample}.tsv")
+    threads: config["resources"]["samtools_index_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_snrna_index", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "snrna_bai",
+            log_path("slurm", f"snrna_bai.{wildcards.sample}.%A.log"),
+            config["resources"]["samtools_index_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "{params.benchmark_dir}"
+        samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
+        """
+
+
 rule build_branchpoint_reference:
     input:
         init=INIT_SENTINEL,
@@ -1900,7 +1932,8 @@ rule bam_qc:
 rule count_snrna_premap_reads:
     input:
         init=INIT_SENTINEL,
-        bam=results_path("premap_snrna", "{sample}.snrna.bam")
+        bam=results_path("premap_snrna", "{sample}.snrna.bam"),
+        bai=results_path("premap_snrna", "{sample}.snrna.bam.bai")
     output:
         counts=results_path("qc", "snrna_counts", "{sample}.snrna_counts.tsv")
     log:
