@@ -3,6 +3,8 @@
 import argparse
 import collections
 import gzip
+import pickle
+import shutil
 import subprocess
 import sys
 
@@ -76,10 +78,14 @@ def parse_args():
     parser.add_argument("--rrna-bam", required=True)
     parser.add_argument("--snrna-bam", required=True)
     parser.add_argument("--star-bam", required=True)
-    parser.add_argument("--gtf", required=True)
+    parser.add_argument("--gtf")
+    parser.add_argument("--reference-cache")
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--output", required=True)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.gtf is None and args.reference_cache is None:
+        parser.error("one of --gtf or --reference-cache is required")
+    return args
 
 
 def open_text(path):
@@ -88,7 +94,33 @@ def open_text(path):
     return open(path)
 
 
-def count_fastq_reads(path):
+def count_fastq_reads(path, threads=1):
+    if path.endswith(".gz"):
+        pigz = shutil.which("pigz")
+        if pigz is not None:
+            command = [pigz, "-dc", "-p", str(max(1, threads)), path]
+        else:
+            command = ["gzip", "-dc", path]
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, text=False)
+        try:
+            if process.stdout is None:
+                raise RuntimeError("Failed to open FASTQ decompression stream")
+            counter = subprocess.run(
+                ["wc", "-l"],
+                stdin=process.stdout,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
+        finally:
+            if process.stdout is not None:
+                process.stdout.close()
+        return_code = process.wait()
+        if return_code != 0:
+            raise subprocess.CalledProcessError(return_code, command)
+        return int(counter.stdout.strip().split()[0]) // 4
+
     count = 0
     with open_text(path) as handle:
         while True:
@@ -99,17 +131,6 @@ def count_fastq_reads(path):
             handle.readline()
             handle.readline()
             count += 1
-    return count
-
-
-def count_primary_read1_alignments(path):
-    count = 0
-    with pysam.AlignmentFile(path, "rb") as bam:
-        for aln in bam.fetch(until_eof=True):
-            if aln.is_unmapped or aln.is_secondary or aln.is_supplementary:
-                continue
-            if aln.is_read1:
-                count += 1
     return count
 
 
@@ -166,7 +187,7 @@ def parse_gtf(gtf_path):
     protein_coding_genes = {}
     protein_coding_exons = collections.defaultdict(list)
 
-    with open(gtf_path) as handle:
+    with open_text(gtf_path) as handle:
         for line in handle:
             if not line or line.startswith("#"):
                 continue
@@ -214,7 +235,18 @@ def parse_gtf(gtf_path):
     for tree in annotated_gene_trees.values():
         tree.merge_overlaps(strict=False)
 
-    return category_trees, annotated_gene_trees
+    frozen_category_trees = {
+        category: dict(chrom_trees)
+        for category, chrom_trees in category_trees.items()
+    }
+    frozen_annotated_gene_trees = dict(annotated_gene_trees)
+
+    return frozen_category_trees, frozen_annotated_gene_trees
+
+
+def load_reference_cache(path):
+    with open(path, "rb") as handle:
+        return pickle.load(handle)
 
 
 def tree_has_overlap(tree_by_chrom, chrom, start, end):
@@ -266,7 +298,8 @@ def classify_fragment(alignments, category_trees, annotated_gene_trees):
 
 
 def iter_name_collated_groups(star_bam_path, threads):
-    command = ["samtools", "collate", "-u", "-O", "-@", str(threads), star_bam_path]
+    # Fast collate keeps only primary alignments, which is all this classifier uses.
+    command = ["samtools", "collate", "-f", "-u", "-O", "-@", str(threads), star_bam_path]
     process = subprocess.Popen(command, stdout=subprocess.PIPE)
     try:
         with pysam.AlignmentFile(process.stdout, "rb") as bam:
@@ -299,7 +332,7 @@ def classify_star_bam(star_bam_path, category_trees, annotated_gene_trees, threa
         primary_mapped = [
             aln
             for aln in alignments
-            if not aln.is_unmapped and not aln.is_secondary and not aln.is_supplementary
+            if not aln.is_unmapped
         ]
         if not primary_mapped:
             continue
@@ -313,10 +346,13 @@ def classify_star_bam(star_bam_path, category_trees, annotated_gene_trees, threa
 def main():
     args = parse_args()
 
-    category_trees, annotated_gene_trees = parse_gtf(args.gtf)
+    if args.reference_cache is not None:
+        category_trees, annotated_gene_trees = load_reference_cache(args.reference_cache)
+    else:
+        category_trees, annotated_gene_trees = parse_gtf(args.gtf)
 
-    total_input_pairs = count_fastq_reads(args.umi_ready_r1)
-    star_input_pairs = count_fastq_reads(args.star_input_r1)
+    total_input_pairs = count_fastq_reads(args.umi_ready_r1, args.threads)
+    star_input_pairs = count_fastq_reads(args.star_input_r1, args.threads)
     rrna_pairs = count_unique_query_names(args.rrna_bam)
     snrna_pairs = count_unique_query_names(args.snrna_bam)
 

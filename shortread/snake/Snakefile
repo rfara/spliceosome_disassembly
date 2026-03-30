@@ -212,6 +212,7 @@ BRANCHPOINT_RELATIVE_FEATURES_PLOT_PNG = results_path("branchpoints", "relative_
 BRANCHPOINT_RELATIVE_FEATURES_PLOT_PDF = results_path("branchpoints", "relative_branching_features", "relative_branching_features.pdf")
 BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PNG = results_path("branchpoints", "relative_branching_features", "feature_distributions.png")
 BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PDF = results_path("branchpoints", "relative_branching_features", "feature_distributions.pdf")
+RNA_CONTENT_REFERENCE = results_path("reference", "rna_content", "annotation.pkl")
 BAM_QC_STAGES = {
     "premap_rrna": results_path("premap_rrna", "{sample}.rrna.bam"),
     "premap_snrna": results_path("premap_snrna", "{sample}.snrna.bam"),
@@ -366,6 +367,7 @@ WORKFLOW_DIRS = [
     results_path("reference", "rrna"),
     results_path("reference", "snrna"),
     results_path("reference", "star_genome"),
+    results_path("reference", "rna_content"),
     results_path("trimmed", "r1"),
     results_path("trimmed", "r2"),
     results_path("umi", "r1"),
@@ -408,11 +410,11 @@ WORKFLOW_DIRS = [
     log_path("umi"),
     log_path("premap_rrna"),
     log_path("premap_snrna"),
-    log_path("premap_snrna_index"),
     log_path("star"),
     log_path("star_index"),
     log_path("dedup"),
     log_path("dedup_index"),
+    log_path("rna_content_reference"),
     log_path("qc_fastqc"),
     log_path("qc_bam"),
     log_path("qc_rna_content"),
@@ -430,11 +432,11 @@ WORKFLOW_DIRS = [
     benchmark_path("umi"),
     benchmark_path("premap_rrna"),
     benchmark_path("premap_snrna"),
-    benchmark_path("premap_snrna_index"),
     benchmark_path("star"),
     benchmark_path("star_index"),
     benchmark_path("dedup"),
     benchmark_path("dedup_index"),
+    benchmark_path("rna_content_reference"),
     benchmark_path("qc_fastqc"),
     benchmark_path("qc_bam"),
     benchmark_path("qc_rna_content"),
@@ -1038,12 +1040,14 @@ rule fastqc_star_unmapped_reads:
     params:
         outdir_r1=results_path("qc", "fastqc", "star_unmapped", "r1"),
         outdir_r2=results_path("qc", "fastqc", "star_unmapped", "r2"),
-        alias_r1=lambda wildcards: results_path(
+        # Keep the alias path literal so forced reruns do not resolve the existing
+        # symlink back to the STAR input and try to relink a file onto itself.
+        alias_r1=lambda wildcards: str(RESULTS_DIR.joinpath(
             "qc", "fastqc", "star_unmapped", "r1", f"{wildcards.sample}.star_unmapped.fastq"
-        ),
-        alias_r2=lambda wildcards: results_path(
+        )),
+        alias_r2=lambda wildcards: str(RESULTS_DIR.joinpath(
             "qc", "fastqc", "star_unmapped", "r2", f"{wildcards.sample}.star_unmapped.fastq"
-        ),
+        )),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_fastqc", f"star_unmapped.{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_short",
@@ -1095,6 +1099,40 @@ rule summarize_star_unmapped_reads:
         """
 
 
+rule build_rna_content_reference:
+    input:
+        init=INIT_SENTINEL,
+        gtf=repo_path(config["references"]["genome_gtf"])
+    output:
+        reference=RNA_CONTENT_REFERENCE
+    log:
+        log_path("rna_content_reference", "build.log")
+    benchmark:
+        benchmark_path("rna_content_reference", "build.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "build_rna_content_reference.py").resolve()),
+        benchmark_dir=str(Path(benchmark_path("rna_content_reference", "build.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "rna_content_ref",
+            log_path("slurm", "rna_content_ref.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.reference})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --gtf {input.gtf} \
+          --output {output.reference} \
+          > {log} 2>&1
+        """
+
+
 rule classify_rna_content:
     input:
         init=INIT_SENTINEL,
@@ -1103,7 +1141,7 @@ rule classify_rna_content:
         rrna_bam=results_path("premap_rrna", "{sample}.rrna.bam"),
         snrna_bam=results_path("premap_snrna", "{sample}.snrna.bam"),
         star_bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
-        gtf=repo_path(config["references"]["genome_gtf"])
+        reference=RNA_CONTENT_REFERENCE
     output:
         tsv=results_path("qc", "rna_content", "{sample}.rna_content.tsv")
     log:
@@ -1133,7 +1171,7 @@ rule classify_rna_content:
           --rrna-bam {input.rrna_bam} \
           --snrna-bam {input.snrna_bam} \
           --star-bam {input.star_bam} \
-          --gtf {input.gtf} \
+          --reference-cache {input.reference} \
           --threads {threads} \
           --output {output.tsv} \
           > {log} 2>&1
@@ -1241,36 +1279,6 @@ rule index_deduplicated_bam:
             "8G",
             "bam_index",
             log_path("slurm", f"bam_index.{wildcards.sample}.%A.log"),
-            config["resources"]["samtools_index_threads"],
-        )
-    shell:
-        r"""
-        set -euo pipefail
-        mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "{params.benchmark_dir}"
-        samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
-        """
-
-
-rule index_snrna_premap_bam:
-    input:
-        init=INIT_SENTINEL,
-        bam=results_path("premap_snrna", "{sample}.snrna.bam")
-    output:
-        bai=results_path("premap_snrna", "{sample}.snrna.bam.bai")
-    log:
-        log_path("premap_snrna_index", "{sample}.log")
-    benchmark:
-        benchmark_path("premap_snrna_index", "{sample}.tsv")
-    threads: config["resources"]["samtools_index_threads"]
-    conda:
-        str(ENV_YAML)
-    params:
-        benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_snrna_index", f"{wildcards.sample}.tsv")).parent),
-        cluster=lambda wildcards: slurm_cluster_args(
-            "c_short",
-            "8G",
-            "snrna_bai",
-            log_path("slurm", f"snrna_bai.{wildcards.sample}.%A.log"),
             config["resources"]["samtools_index_threads"],
         )
     shell:
@@ -1932,8 +1940,7 @@ rule bam_qc:
 rule count_snrna_premap_reads:
     input:
         init=INIT_SENTINEL,
-        bam=results_path("premap_snrna", "{sample}.snrna.bam"),
-        bai=results_path("premap_snrna", "{sample}.snrna.bam.bai")
+        bam=results_path("premap_snrna", "{sample}.snrna.bam")
     output:
         counts=results_path("qc", "snrna_counts", "{sample}.snrna_counts.tsv")
     log:
@@ -1956,50 +1963,59 @@ rule count_snrna_premap_reads:
         r"""
         set -euo pipefail
         mkdir -p "$(dirname {output.counts})" "$(dirname {log})" "{params.benchmark_dir}"
-        idxstats_file="$(mktemp)"
-        fragments_file="$(mktemp)"
-        trap 'rm -f "$idxstats_file" "$fragments_file"' EXIT
-        samtools idxstats {input.bam} > "$idxstats_file"
-        samtools view -@ {threads} -F 2308 {input.bam} \
-          | cut -f 1,3 \
-          | sort -u \
-          | cut -f 2 \
-          | sort \
-          | uniq -c > "$fragments_file"
-        python - "$idxstats_file" "$fragments_file" "{output.counts}" > {log} 2>&1 <<'PY'
+        python - "{input.bam}" "{output.counts}" "{threads}" > {log} 2>&1 <<'PY'
+import subprocess
 import sys
 
-idxstats_path, fragments_path, output_path = sys.argv[1:4]
+import pysam
 
-counts = {{}}
-order = []
-with open(idxstats_path) as handle:
-    for line in handle:
-        ref, length, mapped, unmapped = line.rstrip().split("\t")
-        if ref == "*":
-            continue
-        counts[ref] = {{
-            "length": int(length),
-            "read_count": int(mapped),
-            "fragment_count": 0,
-        }}
-        order.append(ref)
+bam_path, output_path, threads = sys.argv[1], sys.argv[2], int(sys.argv[3])
 
-with open(fragments_path) as handle:
-    for line in handle:
-        line = line.strip()
-        if not line:
-            continue
-        count, ref = line.split(None, 1)
-        if ref in counts:
-            counts[ref]["fragment_count"] = int(count)
+with pysam.AlignmentFile(bam_path, "rb") as bam:
+    order = list(bam.references)
+    counts = {
+        ref: {"length": length, "read_count": 0, "fragment_count": 0}
+        for ref, length in zip(bam.references, bam.lengths)
+    }
+
+command = ["samtools", "collate", "-f", "-u", "-O", "-@", str(threads), bam_path]
+process = subprocess.Popen(command, stdout=subprocess.PIPE)
+try:
+    with pysam.AlignmentFile(process.stdout, "rb") as bam:
+        current_name = None
+        current_refs = set()
+        for alignment in bam.fetch(until_eof=True):
+            if alignment.is_unmapped:
+                continue
+
+            ref = alignment.reference_name
+            counts[ref]["read_count"] += 1
+
+            if current_name is None:
+                current_name = alignment.query_name
+            if alignment.query_name != current_name:
+                for previous_ref in current_refs:
+                    counts[previous_ref]["fragment_count"] += 1
+                current_name = alignment.query_name
+                current_refs = set()
+            current_refs.add(ref)
+
+        if current_name is not None:
+            for previous_ref in current_refs:
+                counts[previous_ref]["fragment_count"] += 1
+finally:
+    if process.stdout is not None:
+        process.stdout.close()
+    return_code = process.wait()
+    if return_code != 0:
+        raise subprocess.CalledProcessError(return_code, command)
 
 with open(output_path, "w") as handle:
     handle.write("reference\tlength\tread_count\tfragment_count\n")
     for ref in order:
         entry = counts[ref]
         handle.write(
-            f"{{ref}}\t{{entry['length']}}\t{{entry['read_count']}}\t{{entry['fragment_count']}}\n"
+            f"{ref}\t{entry['length']}\t{entry['read_count']}\t{entry['fragment_count']}\n"
         )
 PY
         """
