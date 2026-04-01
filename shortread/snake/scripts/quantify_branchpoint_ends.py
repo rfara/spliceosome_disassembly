@@ -9,6 +9,9 @@ from dataclasses import dataclass
 import pysam
 
 
+INTRON_INDEX_BIN_SIZE = 1000
+
+
 @dataclass(frozen=True)
 class SelectedIntron:
     intron_id: str
@@ -38,8 +41,11 @@ def parse_args():
     parser.add_argument("--anchor-window", type=int, required=True)
     parser.add_argument("--profile-upstream", type=int, required=True)
     parser.add_argument("--profile-downstream", type=int, required=True)
+    parser.add_argument("--three-prime-coverage-upstream", type=int, required=True)
+    parser.add_argument("--three-prime-coverage-downstream", type=int, required=True)
     parser.add_argument("--output-site-counts", required=True)
     parser.add_argument("--output-offset-counts", required=True)
+    parser.add_argument("--output-three-prime-coverage", required=True)
     parser.add_argument("--output-metaprofile", required=True)
     parser.add_argument("--output-summary", required=True)
     return parser.parse_args()
@@ -51,9 +57,14 @@ def open_text(path, mode="rt"):
     return open(path, mode)
 
 
+def intron_index_bin(position, bin_size=INTRON_INDEX_BIN_SIZE):
+    return (position - 1) // bin_size
+
+
 def load_reference(path, anchor_window):
     introns = {}
     anchor_index = defaultdict(list)
+    intron_interval_index = defaultdict(list)
 
     with open_text(path) as handle:
         reader = csv.DictReader(handle, delimiter="\t")
@@ -79,8 +90,12 @@ def load_reference(path, anchor_window):
             introns[intron.intron_id] = intron
             for position in range(intron.three_prime_ss - anchor_window, intron.three_prime_ss + anchor_window + 1):
                 anchor_index[(intron.chrom, intron.strand, position)].append(intron.intron_id)
+            start_bin = intron_index_bin(intron.intron_start)
+            end_bin = intron_index_bin(intron.intron_end)
+            for bin_number in range(start_bin, end_bin + 1):
+                intron_interval_index[(intron.chrom, intron.strand, bin_number)].append(intron.intron_id)
 
-    return introns, anchor_index
+    return introns, anchor_index, intron_interval_index
 
 
 def is_unique_primary_fragment(alignment):
@@ -125,6 +140,40 @@ def oriented_offset(position, feature_position, strand):
 
 def position_within_intron(position, intron):
     return intron.intron_start <= position <= intron.intron_end
+
+
+def introns_for_five_prime_position(introns, intron_interval_index, chrom, strand, position):
+    intron_ids = intron_interval_index.get((chrom, strand, intron_index_bin(position)), [])
+    return [introns[intron_id] for intron_id in intron_ids if position_within_intron(position, introns[intron_id])]
+
+
+def three_prime_spanning_introns(introns, intron_interval_index, chrom, strand, read1_five_prime, fragment_three_prime):
+    hits = []
+    for intron in introns_for_five_prime_position(introns, intron_interval_index, chrom, strand, read1_five_prime):
+        read1_five_prime_offset = oriented_offset(read1_five_prime, intron.three_prime_ss, intron.strand)
+        fragment_three_prime_offset = oriented_offset(fragment_three_prime, intron.three_prime_ss, intron.strand)
+        if read1_five_prime_offset > 0:
+            continue
+        if fragment_three_prime_offset < 0:
+            continue
+        hits.append((intron, read1_five_prime_offset, fragment_three_prime_offset))
+    return hits
+
+
+def update_three_prime_coverage_counts(
+    intron_coverage_counts,
+    intron_id,
+    start_offset,
+    end_offset,
+    upstream,
+    downstream,
+):
+    coverage_start = max(start_offset, -upstream)
+    coverage_end = min(end_offset, downstream)
+    if coverage_start > coverage_end:
+        return
+    for offset in range(coverage_start, coverage_end + 1):
+        intron_coverage_counts[intron_id][offset] += 1
 
 
 def write_site_counts(path, sample, condition, introns, site_counts, library_size):
@@ -269,6 +318,24 @@ def write_offset_counts(path, sample, condition, offset_counts):
                 )
 
 
+def write_three_prime_coverage(path, sample, condition, coverage_counts):
+    fieldnames = ["sample", "condition", "intron_id", "offset_nt", "coverage_count"]
+    with open_text(path, "wt") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t")
+        writer.writeheader()
+        for intron_id in sorted(coverage_counts):
+            for offset in sorted(coverage_counts[intron_id]):
+                writer.writerow(
+                    {
+                        "sample": sample,
+                        "condition": condition,
+                        "intron_id": intron_id,
+                        "offset_nt": offset,
+                        "coverage_count": coverage_counts[intron_id][offset],
+                    }
+                )
+
+
 def write_summary(path, summary_row):
     fieldnames = list(summary_row.keys())
     with open(path, "w", newline="") as handle:
@@ -279,11 +346,12 @@ def write_summary(path, summary_row):
 
 def main():
     args = parse_args()
-    introns, anchor_index = load_reference(args.reference, args.anchor_window)
+    introns, anchor_index, intron_interval_index = load_reference(args.reference, args.anchor_window)
 
     counters = Counter()
     profile_counts = Counter()
     offset_counts = defaultdict(Counter)
+    intron_three_prime_coverage_counts = defaultdict(Counter)
     site_counts = defaultdict(
         lambda: {
             "anchored_fragments": 0,
@@ -322,6 +390,31 @@ def main():
                 continue
 
             counters["library_fragments"] += 1
+            read1_five_prime = read1_five_prime_coordinate(alignment)
+
+            three_prime_hits = three_prime_spanning_introns(
+                introns,
+                intron_interval_index,
+                alignment.reference_name,
+                strand,
+                read1_five_prime,
+                fragment_three_prime,
+            )
+            if not three_prime_hits:
+                counters["fragments_without_three_prime_coverage_assignment"] += 1
+            elif len(three_prime_hits) > 1:
+                counters["ambiguous_three_prime_coverage_fragments"] += 1
+            else:
+                coverage_intron, coverage_start_offset, coverage_end_offset = three_prime_hits[0]
+                counters["three_prime_spanning_fragments"] += 1
+                update_three_prime_coverage_counts(
+                    intron_three_prime_coverage_counts,
+                    coverage_intron.intron_id,
+                    coverage_start_offset,
+                    coverage_end_offset,
+                    args.three_prime_coverage_upstream,
+                    args.three_prime_coverage_downstream,
+                )
 
             anchor_hits = anchor_index.get((alignment.reference_name, strand, fragment_three_prime), [])
             if not anchor_hits:
@@ -332,7 +425,6 @@ def main():
                 continue
 
             intron = introns[anchor_hits[0]]
-            read1_five_prime = read1_five_prime_coordinate(alignment)
             if not position_within_intron(read1_five_prime, intron):
                 counters["filtered_five_prime_outside_intron"] += 1
                 continue
@@ -362,8 +454,15 @@ def main():
         "anchor_window_nt": args.anchor_window,
         "profile_upstream_nt": args.profile_upstream,
         "profile_downstream_nt": args.profile_downstream,
+        "three_prime_coverage_upstream_nt": args.three_prime_coverage_upstream,
+        "three_prime_coverage_downstream_nt": args.three_prime_coverage_downstream,
         "read1_records_examined": counters["read1_records_examined"],
         "library_fragments": counters["library_fragments"],
+        "three_prime_spanning_fragments": counters["three_prime_spanning_fragments"],
+        "three_prime_spanning_fragments_cpm": 0
+        if counters["library_fragments"] == 0
+        else counters["three_prime_spanning_fragments"] * 1_000_000.0 / counters["library_fragments"],
+        "three_prime_introns_with_coverage": len(intron_three_prime_coverage_counts),
         "anchored_fragments": counters["anchored_fragments"],
         "anchored_fragments_cpm": 0
         if counters["library_fragments"] == 0
@@ -411,6 +510,10 @@ def main():
         "filtered_improper_pair": counters["filtered_improper_pair"],
         "filtered_nonunique": counters["filtered_nonunique"],
         "filtered_missing_fragment_end": counters["filtered_missing_fragment_end"],
+        "fragments_without_three_prime_coverage_assignment": counters[
+            "fragments_without_three_prime_coverage_assignment"
+        ],
+        "ambiguous_three_prime_coverage_fragments": counters["ambiguous_three_prime_coverage_fragments"],
         "fragments_without_branchpoint_anchor": counters["fragments_without_branchpoint_anchor"],
         "ambiguous_anchor_fragments": counters["ambiguous_anchor_fragments"],
         "filtered_five_prime_outside_intron": counters["filtered_five_prime_outside_intron"],
@@ -425,6 +528,12 @@ def main():
         counters["library_fragments"],
     )
     write_offset_counts(args.output_offset_counts, args.sample, args.condition, offset_counts)
+    write_three_prime_coverage(
+        args.output_three_prime_coverage,
+        args.sample,
+        args.condition,
+        intron_three_prime_coverage_counts,
+    )
     write_metaprofile(
         args.output_metaprofile,
         args.sample,
@@ -440,6 +549,7 @@ def main():
     print(f"Sample: {args.sample}")
     print(f"Condition: {args.condition}")
     print(f"Library fragments: {counters['library_fragments']}")
+    print(f"3'SS-spanning fragments: {counters['three_prime_spanning_fragments']}")
     print(f"Anchored fragments: {counters['anchored_fragments']}")
     print(f"Exact branchpoint fragments: {counters['exact_branchpoint_fragments']}")
     print(f"Plus-one branchpoint fragments: {counters['plus_one_branchpoint_fragments']}")

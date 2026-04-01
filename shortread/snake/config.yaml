@@ -59,6 +59,11 @@ branchpoint_analysis:
   anchor_window: 5
   profile_upstream: 100
   profile_downstream: 100
+  plot_upstream: 50
+  plot_downstream: 10
+  canonical_branchpoint_motif: YUNAY
+  three_prime_coverage_upstream: 100
+  three_prime_coverage_downstream: 100
   shared_min_reads_all_samples: 5
   readthrough_profile_upstream: 100
   readthrough_profile_downstream: 100

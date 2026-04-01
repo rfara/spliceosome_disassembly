@@ -759,10 +759,6 @@ def plot_results(
     plot_upstream=None,
     plot_downstream=None,
 ):
-    sample_profiles = defaultdict(list)
-    for row in sample_rows:
-        sample_profiles[row["sample"]].append(row)
-
     condition_profiles = defaultdict(list)
     for row in condition_rows:
         condition_profiles[row["condition"]].append(row)
@@ -784,24 +780,6 @@ def plot_results(
 
     for axis, (title, sample_field, condition_field, ci95_field) in zip(axes, EVENT_SPECS):
         visible_y_max = 0.0
-        for sample in sorted(sample_profiles):
-            rows = [
-                row
-                for row in sorted(sample_profiles[sample], key=lambda row: int(row["offset_nt"]))
-                if x_min <= int(row["offset_nt"]) <= x_max
-            ]
-            if not rows:
-                continue
-            condition = rows[0]["condition"]
-            color = CONDITION_COLORS.get(condition, "#4c4c4c")
-            axis.plot(
-                [int(row["offset_nt"]) for row in rows],
-                [float(row[sample_field]) for row in rows],
-                color=color,
-                alpha=0.25,
-                linewidth=1.0,
-            )
-
         for condition in condition_order:
             rows = [
                 row

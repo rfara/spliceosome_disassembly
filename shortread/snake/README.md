@@ -98,8 +98,12 @@ It:
 Positive offsets in the metaprofile point towards the intron 3' splice site.
 The per-sample summary tables report branchpoint-proximal counts at offset `0`, offset `+1`, and combined `0/+1`, both as fractions of anchored fragments and as CPM.
 The threshold for the shared intron set is configurable via `branchpoint_analysis.shared_min_reads_all_samples` in `shortread/snake/config.yaml`.
-The combined outputs include both the original 5' end metaprofile and a coverage-style metaprofile that assumes anchored 3' ends align to the 3' splice site.
+The combined outputs include the original 5' end metaprofile, a coverage-style metaprofile that assumes anchored 3' ends align to the 3' splice site, canonical-versus-remaining branchpoint coverage replots, and a separate 3' splice site-centred coverage metaprofile.
 Anchored fragments are required to have a fragment 3' end near the intron 3' splice site and a `read1` 5' end that still falls inside the selected intron. The stored intron-offset tables retain all such intronic 5' ends, even when they fall outside the plotted metaprofile window, so upstream starts contribute correctly to the coverage metaprofile.
+The additional branchpoint coverage replots classify the selected branchpoint of each shared intron by strand-aware RNA motif, using `branchpoint_analysis.canonical_branchpoint_motif` in `shortread/snake/config.yaml`. With the current default `YUNAY`, the unique `A` in the motif is treated as the branchpoint base, so canonical introns match positions `-3..+1` relative to the branchpoint and all other shared introns fall into the remaining category. These plots are additive and do not replace the original all-introns coverage metaprofile.
+
+All branchpoint-centred 5' end and coverage metaprofile plots currently display the window set by `branchpoint_analysis.plot_upstream` and `branchpoint_analysis.plot_downstream` in `shortread/snake/config.yaml` (currently `-50..+10`), without changing the wider stored quantification windows used upstream of plotting.
+The 3' splice site-centred coverage output uses a broader fragment set: all unique, proper-pair fragments whose `read1` 5' end lies inside a selected intron and whose fragment span crosses that intron's 3' splice site. This includes fragments whose 3' ends extend downstream of the splice site. The default window is `-100` to `+100 nt`, configurable via `branchpoint_analysis.three_prime_coverage_upstream` and `branchpoint_analysis.three_prime_coverage_downstream`.
 Combined metaprofile plots show each condition as a thick mean trace with a shaded 95% confidence interval derived from replicate-to-replicate variability.
 
 There is also an intron-level heterogeneity analysis that tests whether branchpoint-proximal reads are more unevenly distributed between introns than expected under a single shared branching probability. It reports this separately for each sample and pooled condition, and compares the configured query condition against the configured control condition using shared introns ranked by control branching.
@@ -129,13 +133,21 @@ Main outputs:
 - `shortread/snake/results/branchpoints/samples/{sample}.metaprofile.tsv`
 - `shortread/snake/results/branchpoints/samples/{sample}.site_counts.tsv.gz`
 - `shortread/snake/results/branchpoints/samples/{sample}.offset_counts.tsv.gz`
+- `shortread/snake/results/branchpoints/samples/{sample}.three_prime_coverage.tsv.gz`
 - `shortread/snake/results/branchpoints/combined/shared_introns.tsv`
 - `shortread/snake/results/branchpoints/combined/metaprofile.by_sample.tsv`
 - `shortread/snake/results/branchpoints/combined/metaprofile.by_condition.tsv`
+- `shortread/snake/results/branchpoints/combined/branchpoint_coverage.by_motif.by_sample.tsv`
+- `shortread/snake/results/branchpoints/combined/branchpoint_coverage.by_motif.by_condition.tsv`
+- `shortread/snake/results/branchpoints/combined/three_prime_coverage.by_sample.tsv`
+- `shortread/snake/results/branchpoints/combined/three_prime_coverage.by_condition.tsv`
 - `shortread/snake/results/branchpoints/combined/summary.by_sample.tsv`
 - `shortread/snake/results/branchpoints/combined/summary.by_condition.tsv`
 - `shortread/snake/results/branchpoints/combined/branchpoint_5prime_metaprofile.png`
 - `shortread/snake/results/branchpoints/combined/branchpoint_coverage_metaprofile.png`
+- `shortread/snake/results/branchpoints/combined/branchpoint_coverage_metaprofile.canonical.png`
+- `shortread/snake/results/branchpoints/combined/branchpoint_coverage_metaprofile.remaining.png`
+- `shortread/snake/results/branchpoints/combined/three_prime_ss_coverage_metaprofile.png`
 - `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.summary.tsv`
 - `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.metaprofile.tsv`
 - `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.site_counts.tsv.gz`

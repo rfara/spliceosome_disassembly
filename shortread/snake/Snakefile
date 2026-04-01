@@ -57,6 +57,11 @@ BRANCHPOINT_SAMPLE_METAPROFILE = results_path("branchpoints", "samples", "{sampl
 BRANCHPOINT_SAMPLE_SUMMARY = results_path("branchpoints", "samples", "{sample}.summary.tsv")
 BRANCHPOINT_SAMPLE_SITE_COUNTS = results_path("branchpoints", "samples", "{sample}.site_counts.tsv.gz")
 BRANCHPOINT_SAMPLE_INTRON_OFFSETS = results_path("branchpoints", "samples", "{sample}.offset_counts.tsv.gz")
+BRANCHPOINT_SAMPLE_THREE_PRIME_COVERAGE = results_path(
+    "branchpoints",
+    "samples",
+    "{sample}.three_prime_coverage.tsv.gz",
+)
 BRANCHPOINT_COMBINED_METAPROFILE_BY_SAMPLE = results_path("branchpoints", "combined", "metaprofile.by_sample.tsv")
 BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION = results_path("branchpoints", "combined", "metaprofile.by_condition.tsv")
 BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE = results_path("branchpoints", "combined", "summary.by_sample.tsv")
@@ -66,6 +71,56 @@ BRANCHPOINT_COMBINED_PLOT_PNG = results_path("branchpoints", "combined", "branch
 BRANCHPOINT_COMBINED_PLOT_PDF = results_path("branchpoints", "combined", "branchpoint_5prime_metaprofile.pdf")
 BRANCHPOINT_COMBINED_COVERAGE_PLOT_PNG = results_path("branchpoints", "combined", "branchpoint_coverage_metaprofile.png")
 BRANCHPOINT_COMBINED_COVERAGE_PLOT_PDF = results_path("branchpoints", "combined", "branchpoint_coverage_metaprofile.pdf")
+BRANCHPOINT_COMBINED_COVERAGE_BY_MOTIF_BY_SAMPLE = results_path(
+    "branchpoints",
+    "combined",
+    "branchpoint_coverage.by_motif.by_sample.tsv",
+)
+BRANCHPOINT_COMBINED_COVERAGE_BY_MOTIF_BY_CONDITION = results_path(
+    "branchpoints",
+    "combined",
+    "branchpoint_coverage.by_motif.by_condition.tsv",
+)
+BRANCHPOINT_COMBINED_CANONICAL_COVERAGE_PLOT_PNG = results_path(
+    "branchpoints",
+    "combined",
+    "branchpoint_coverage_metaprofile.canonical.png",
+)
+BRANCHPOINT_COMBINED_CANONICAL_COVERAGE_PLOT_PDF = results_path(
+    "branchpoints",
+    "combined",
+    "branchpoint_coverage_metaprofile.canonical.pdf",
+)
+BRANCHPOINT_COMBINED_REMAINING_COVERAGE_PLOT_PNG = results_path(
+    "branchpoints",
+    "combined",
+    "branchpoint_coverage_metaprofile.remaining.png",
+)
+BRANCHPOINT_COMBINED_REMAINING_COVERAGE_PLOT_PDF = results_path(
+    "branchpoints",
+    "combined",
+    "branchpoint_coverage_metaprofile.remaining.pdf",
+)
+BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE = results_path(
+    "branchpoints",
+    "combined",
+    "three_prime_coverage.by_sample.tsv",
+)
+BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION = results_path(
+    "branchpoints",
+    "combined",
+    "three_prime_coverage.by_condition.tsv",
+)
+BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PNG = results_path(
+    "branchpoints",
+    "combined",
+    "three_prime_ss_coverage_metaprofile.png",
+)
+BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PDF = results_path(
+    "branchpoints",
+    "combined",
+    "three_prime_ss_coverage_metaprofile.pdf",
+)
 BRANCHPOINT_READTHROUGH_SAMPLE_METAPROFILE = results_path(
     "branchpoints",
     "readthrough_events",
@@ -462,6 +517,7 @@ rule all:
         expand(BRANCHPOINT_SAMPLE_SUMMARY, sample=SAMPLES),
         expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES),
         expand(BRANCHPOINT_SAMPLE_INTRON_OFFSETS, sample=SAMPLES),
+        expand(BRANCHPOINT_SAMPLE_THREE_PRIME_COVERAGE, sample=SAMPLES),
         BRANCHPOINT_COMBINED_METAPROFILE_BY_SAMPLE,
         BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
         BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
@@ -469,6 +525,18 @@ rule all:
         BRANCHPOINT_COMBINED_SHARED_INTRONS,
         BRANCHPOINT_COMBINED_PLOT_PNG,
         BRANCHPOINT_COMBINED_PLOT_PDF,
+        BRANCHPOINT_COMBINED_COVERAGE_PLOT_PNG,
+        BRANCHPOINT_COMBINED_COVERAGE_PLOT_PDF,
+        BRANCHPOINT_COMBINED_COVERAGE_BY_MOTIF_BY_SAMPLE,
+        BRANCHPOINT_COMBINED_COVERAGE_BY_MOTIF_BY_CONDITION,
+        BRANCHPOINT_COMBINED_CANONICAL_COVERAGE_PLOT_PNG,
+        BRANCHPOINT_COMBINED_CANONICAL_COVERAGE_PLOT_PDF,
+        BRANCHPOINT_COMBINED_REMAINING_COVERAGE_PLOT_PNG,
+        BRANCHPOINT_COMBINED_REMAINING_COVERAGE_PLOT_PDF,
+        BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
+        BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
+        BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PNG,
+        BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PDF,
         expand(BRANCHPOINT_READTHROUGH_SAMPLE_METAPROFILE, sample=SAMPLES),
         expand(BRANCHPOINT_READTHROUGH_SAMPLE_SUMMARY, sample=SAMPLES),
         expand(BRANCHPOINT_READTHROUGH_SAMPLE_SITE_COUNTS, sample=SAMPLES),
@@ -1314,6 +1382,7 @@ rule quantify_branchpoint_ends:
     output:
         site_counts=BRANCHPOINT_SAMPLE_SITE_COUNTS,
         offset_counts=BRANCHPOINT_SAMPLE_INTRON_OFFSETS,
+        three_prime_coverage=BRANCHPOINT_SAMPLE_THREE_PRIME_COVERAGE,
         metaprofile=BRANCHPOINT_SAMPLE_METAPROFILE,
         summary=BRANCHPOINT_SAMPLE_SUMMARY
     log:
@@ -1329,6 +1398,14 @@ rule quantify_branchpoint_ends:
         anchor_window=BRANCHPOINT_CFG["anchor_window"],
         profile_upstream=BRANCHPOINT_CFG["profile_upstream"],
         profile_downstream=BRANCHPOINT_CFG["profile_downstream"],
+        three_prime_coverage_upstream=BRANCHPOINT_CFG.get(
+            "three_prime_coverage_upstream",
+            BRANCHPOINT_CFG["profile_upstream"],
+        ),
+        three_prime_coverage_downstream=BRANCHPOINT_CFG.get(
+            "three_prime_coverage_downstream",
+            BRANCHPOINT_CFG["profile_downstream"],
+        ),
         benchmark_dir=lambda wildcards: str(Path(benchmark_path("branchpoints_quantify", f"{wildcards.sample}.tsv")).parent),
         cluster=lambda wildcards: slurm_cluster_args(
             "c_medium",
@@ -1349,8 +1426,11 @@ rule quantify_branchpoint_ends:
           --anchor-window {params.anchor_window} \
           --profile-upstream {params.profile_upstream} \
           --profile-downstream {params.profile_downstream} \
+          --three-prime-coverage-upstream {params.three_prime_coverage_upstream} \
+          --three-prime-coverage-downstream {params.three_prime_coverage_downstream} \
           --output-site-counts {output.site_counts} \
           --output-offset-counts {output.offset_counts} \
+          --output-three-prime-coverage {output.three_prime_coverage} \
           --output-metaprofile {output.metaprofile} \
           --output-summary {output.summary} \
           > {log} 2>&1
@@ -1363,7 +1443,8 @@ rule aggregate_branchpoint_profiles:
         metaprofiles=expand(BRANCHPOINT_SAMPLE_METAPROFILE, sample=SAMPLES),
         summaries=expand(BRANCHPOINT_SAMPLE_SUMMARY, sample=SAMPLES),
         site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES),
-        intron_offsets=expand(BRANCHPOINT_SAMPLE_INTRON_OFFSETS, sample=SAMPLES)
+        intron_offsets=expand(BRANCHPOINT_SAMPLE_INTRON_OFFSETS, sample=SAMPLES),
+        three_prime_coverages=expand(BRANCHPOINT_SAMPLE_THREE_PRIME_COVERAGE, sample=SAMPLES)
     output:
         metaprofile_by_sample=BRANCHPOINT_COMBINED_METAPROFILE_BY_SAMPLE,
         metaprofile_by_condition=BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
@@ -1373,7 +1454,17 @@ rule aggregate_branchpoint_profiles:
         plot_png=BRANCHPOINT_COMBINED_PLOT_PNG,
         plot_pdf=BRANCHPOINT_COMBINED_PLOT_PDF,
         coverage_plot_png=BRANCHPOINT_COMBINED_COVERAGE_PLOT_PNG,
-        coverage_plot_pdf=BRANCHPOINT_COMBINED_COVERAGE_PLOT_PDF
+        coverage_plot_pdf=BRANCHPOINT_COMBINED_COVERAGE_PLOT_PDF,
+        coverage_by_motif_by_sample=BRANCHPOINT_COMBINED_COVERAGE_BY_MOTIF_BY_SAMPLE,
+        coverage_by_motif_by_condition=BRANCHPOINT_COMBINED_COVERAGE_BY_MOTIF_BY_CONDITION,
+        canonical_coverage_plot_png=BRANCHPOINT_COMBINED_CANONICAL_COVERAGE_PLOT_PNG,
+        canonical_coverage_plot_pdf=BRANCHPOINT_COMBINED_CANONICAL_COVERAGE_PLOT_PDF,
+        remaining_coverage_plot_png=BRANCHPOINT_COMBINED_REMAINING_COVERAGE_PLOT_PNG,
+        remaining_coverage_plot_pdf=BRANCHPOINT_COMBINED_REMAINING_COVERAGE_PLOT_PDF,
+        three_prime_coverage_by_sample=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
+        three_prime_coverage_by_condition=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
+        three_prime_coverage_plot_png=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PNG,
+        three_prime_coverage_plot_pdf=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PDF
     log:
         log_path("branchpoints_aggregate", "combined.log")
     benchmark:
@@ -1395,6 +1486,13 @@ rule aggregate_branchpoint_profiles:
         intron_offset_args=lambda wildcards, input: " ".join(
             f"--intron-offsets {shlex.quote(path)}" for path in input.intron_offsets
         ),
+        three_prime_coverage_args=lambda wildcards, input: " ".join(
+            f"--three-prime-coverage {shlex.quote(path)}" for path in input.three_prime_coverages
+        ),
+        genome_fasta=repo_path(BRANCHPOINT_CFG["sequence_context_genome_fasta"]),
+        canonical_branchpoint_motif=BRANCHPOINT_CFG.get("canonical_branchpoint_motif", "YUNAY"),
+        plot_upstream=BRANCHPOINT_CFG.get("plot_upstream", 50),
+        plot_downstream=BRANCHPOINT_CFG.get("plot_downstream", 10),
         shared_min_reads=BRANCHPOINT_CFG["shared_min_reads_all_samples"],
         benchmark_dir=str(Path(benchmark_path("branchpoints_aggregate", "combined.tsv")).parent),
         cluster=slurm_cluster_args(
@@ -1413,6 +1511,11 @@ rule aggregate_branchpoint_profiles:
           {params.summary_args} \
           {params.site_count_args} \
           {params.intron_offset_args} \
+          {params.three_prime_coverage_args} \
+          --genome-fasta {params.genome_fasta} \
+          --canonical-branchpoint-motif {params.canonical_branchpoint_motif} \
+          --plot-upstream {params.plot_upstream} \
+          --plot-downstream {params.plot_downstream} \
           --shared-min-reads {params.shared_min_reads} \
           --output-metaprofile-by-sample {output.metaprofile_by_sample} \
           --output-metaprofile-by-condition {output.metaprofile_by_condition} \
@@ -1423,6 +1526,16 @@ rule aggregate_branchpoint_profiles:
           --output-plot-pdf {output.plot_pdf} \
           --output-coverage-plot-png {output.coverage_plot_png} \
           --output-coverage-plot-pdf {output.coverage_plot_pdf} \
+          --output-coverage-by-motif-by-sample {output.coverage_by_motif_by_sample} \
+          --output-coverage-by-motif-by-condition {output.coverage_by_motif_by_condition} \
+          --output-canonical-coverage-plot-png {output.canonical_coverage_plot_png} \
+          --output-canonical-coverage-plot-pdf {output.canonical_coverage_plot_pdf} \
+          --output-remaining-coverage-plot-png {output.remaining_coverage_plot_png} \
+          --output-remaining-coverage-plot-pdf {output.remaining_coverage_plot_pdf} \
+          --output-three-prime-coverage-by-sample {output.three_prime_coverage_by_sample} \
+          --output-three-prime-coverage-by-condition {output.three_prime_coverage_by_condition} \
+          --output-three-prime-coverage-plot-png {output.three_prime_coverage_plot_png} \
+          --output-three-prime-coverage-plot-pdf {output.three_prime_coverage_plot_pdf} \
           > {log} 2>&1
         """
 
@@ -1950,4 +2063,3 @@ rule count_snrna_premap_reads:
           --output {output.counts} \
           > {log} 2>&1
         """
-
