@@ -99,6 +99,8 @@ Positive offsets in the metaprofile point towards the intron 3' splice site.
 The per-sample summary tables report branchpoint-proximal counts at offset `0`, offset `+1`, and combined `0/+1`, both as fractions of anchored fragments and as CPM.
 The threshold for the shared intron set is configurable via `branchpoint_analysis.shared_min_reads_all_samples` in `shortread/snake/config.yaml`.
 The combined outputs include both the original 5' end metaprofile and a coverage-style metaprofile that assumes anchored 3' ends align to the 3' splice site.
+Anchored fragments are required to have a fragment 3' end near the intron 3' splice site and a `read1` 5' end that still falls inside the selected intron. The stored intron-offset tables retain all such intronic 5' ends, even when they fall outside the plotted metaprofile window, so upstream starts contribute correctly to the coverage metaprofile.
+Combined metaprofile plots show each condition as a thick mean trace with a shaded 95% confidence interval derived from replicate-to-replicate variability.
 
 There is also an intron-level heterogeneity analysis that tests whether branchpoint-proximal reads are more unevenly distributed between introns than expected under a single shared branching probability. It reports this separately for each sample and pooled condition, and compares the configured query condition against the configured control condition using shared introns ranked by control branching.
 
@@ -107,6 +109,7 @@ The workflow also includes a sequence-context analysis for branchpoint-associate
 There is also a relative branching feature analysis that uses the configured control condition as a baseline predictor of per-intron branchiness, then asks which intron features and branchpoint-flanking sequence contexts explain branch enrichment or depletion in the configured query condition.
 
 There is also a branchpoint readthrough-event analysis for reads that extend through the selected branchpoint. It keeps the same anchored fragment assignment, restricts to `read1` alignments whose aligned path covers the branchpoint and whose `read1` 5' end lies upstream of it, then uses the `read1` `MD` tag plus CIGAR to profile mismatches, deletions, and insertions separately relative to the branchpoint. The combined comparison is restricted to introns with at least `branchpoint_analysis.readthrough_shared_min_reads_all_samples` traversing reads in every sample, and the metaprofiles report event frequency as a fraction of traversing-read coverage at each offset. The readthrough plots can be cropped independently of the underlying quantification with `branchpoint_analysis.readthrough_plot_upstream` and `branchpoint_analysis.readthrough_plot_downstream`.
+These readthrough metaprofile plots use the same visualization convention: a thick mean trace with a shaded 95% confidence interval for each condition.
 
 The workflow also produces a filtered readthrough replot that blacklists recurrent high-indel introns, excludes loci with extreme total indel burden in any sample, and removes introns with recurrent single-offset indel spikes. The default blacklist is driven by `branchpoint_analysis.readthrough_blacklist_*`, `branchpoint_analysis.readthrough_blacklist_single_offset_*`, and `branchpoint_analysis.readthrough_max_total_indel_percent_any_sample` in `shortread/snake/config.yaml`.
 

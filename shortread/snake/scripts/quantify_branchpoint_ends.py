@@ -123,6 +123,10 @@ def oriented_offset(position, feature_position, strand):
     return feature_position - position
 
 
+def position_within_intron(position, intron):
+    return intron.intron_start <= position <= intron.intron_end
+
+
 def write_site_counts(path, sample, condition, introns, site_counts, library_size):
     fieldnames = [
         "sample",
@@ -329,6 +333,9 @@ def main():
 
             intron = introns[anchor_hits[0]]
             read1_five_prime = read1_five_prime_coordinate(alignment)
+            if not position_within_intron(read1_five_prime, intron):
+                counters["filtered_five_prime_outside_intron"] += 1
+                continue
             offset = oriented_offset(read1_five_prime, intron.branchpoint_position, intron.strand)
 
             counters["anchored_fragments"] += 1
@@ -343,10 +350,10 @@ def main():
             if offset in {0, 1}:
                 counters["zero_or_plus_one_branchpoint_fragments"] += 1
 
+            offset_counts[intron.intron_id][offset] += 1
             if -args.profile_upstream <= offset <= args.profile_downstream:
                 counters["profile_window_fragments"] += 1
                 profile_counts[offset] += 1
-                offset_counts[intron.intron_id][offset] += 1
 
     summary_row = {
         "sample": args.sample,
@@ -406,6 +413,7 @@ def main():
         "filtered_missing_fragment_end": counters["filtered_missing_fragment_end"],
         "fragments_without_branchpoint_anchor": counters["fragments_without_branchpoint_anchor"],
         "ambiguous_anchor_fragments": counters["ambiguous_anchor_fragments"],
+        "filtered_five_prime_outside_intron": counters["filtered_five_prime_outside_intron"],
     }
 
     write_site_counts(

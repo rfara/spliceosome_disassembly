@@ -19,6 +19,39 @@ CONDITION_COLORS = {
     "DIS": "#d95f02",
 }
 
+T_CRITICAL_95_BY_DF = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+    7: 2.365,
+    8: 2.306,
+    9: 2.262,
+    10: 2.228,
+    11: 2.201,
+    12: 2.179,
+    13: 2.160,
+    14: 2.145,
+    15: 2.131,
+    16: 2.120,
+    17: 2.110,
+    18: 2.101,
+    19: 2.093,
+    20: 2.086,
+    21: 2.080,
+    22: 2.074,
+    23: 2.069,
+    24: 2.064,
+    25: 2.060,
+    26: 2.056,
+    27: 2.052,
+    28: 2.048,
+    29: 2.045,
+    30: 2.042,
+}
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -71,6 +104,19 @@ def float_sem(values):
     if len(values) < 2:
         return 0.0
     return statistics.stdev(values) / math.sqrt(len(values))
+
+
+def t_critical_95(sample_size):
+    if sample_size < 2:
+        return 0.0
+    degrees_freedom = sample_size - 1
+    return T_CRITICAL_95_BY_DF.get(degrees_freedom, 1.96)
+
+
+def float_ci95_half_width(values):
+    if len(values) < 2:
+        return 0.0
+    return float_sem(values) * t_critical_95(len(values))
 
 
 def infer_sample_name(rows, path):
@@ -131,6 +177,7 @@ def summarise_condition_profiles(metaprofile_rows, condition_order):
                 condition_row[f"mean_{field}"] = float_mean(values)
                 condition_row[f"sd_{field}"] = float_sd(values)
                 condition_row[f"sem_{field}"] = float_sem(values)
+                condition_row[f"ci95_{field}"] = float_ci95_half_width(values)
             condition_rows.append(condition_row)
     return condition_rows
 
@@ -200,27 +247,35 @@ def build_shared_introns_rows(shared_introns, site_counts_by_sample, site_metada
     return rows, fieldnames
 
 
-def aggregate_offset_counts(intron_offset_counts, shared_introns):
+def aggregate_offset_counts(intron_offset_counts, shared_introns, offset_range):
+    offset_set = set(offset_range)
     total_counts = Counter()
     for intron_id in shared_introns:
         for offset, read_count in intron_offset_counts.get(intron_id, {}).items():
-            total_counts[offset] += read_count
+            if offset in offset_set:
+                total_counts[offset] += read_count
     return total_counts
 
 
-def aggregate_coverage_counts(intron_offset_counts, site_counts, site_metadata, shared_introns, offset_range):
+def aggregate_coverage_counts(intron_offset_counts, site_metadata, shared_introns, offset_range):
     coverage_counts = Counter()
     ordered_offsets = sorted(offset_range)
+    if not ordered_offsets:
+        return coverage_counts
+
+    min_offset = ordered_offsets[0]
 
     for intron_id in shared_introns:
         intron_offsets = intron_offset_counts.get(intron_id, {})
-        intron_row = site_counts.get(intron_id, {})
-        anchored_fragments = count_value(intron_row, "anchored_fragments")
-        observed_fragments = sum(intron_offsets.values())
-        upstream_overflow = max(anchored_fragments - observed_fragments, 0)
         three_prime_offset = count_value(site_metadata[intron_id], "branchpoint_to_3ss_nt")
 
-        cumulative_fragments = upstream_overflow
+        # Offset tables retain all anchored 5' ends that fall within the intron,
+        # including starts upstream of the plotted window.
+        cumulative_fragments = sum(
+            read_count
+            for offset, read_count in intron_offsets.items()
+            if offset < min_offset
+        )
         for offset in ordered_offsets:
             cumulative_fragments += intron_offsets.get(offset, 0)
             if offset <= three_prime_offset:
@@ -336,6 +391,7 @@ def plot_metaprofile_figure(
     shared_min_reads,
     sample_value_field,
     condition_value_field,
+    condition_ci95_field,
     xlabel,
     ylabel,
     title,
@@ -373,11 +429,17 @@ def plot_metaprofile_figure(
     for condition in condition_order:
         ordered_rows = sorted(profile_by_condition[condition], key=lambda row: int(row["offset_nt"]))
         color = CONDITION_COLORS.get(condition, "#4c4c4c")
+        x_values = [int(row["offset_nt"]) for row in ordered_rows]
+        y_values = [float(row[condition_value_field]) for row in ordered_rows]
+        ci95_values = [float(row[condition_ci95_field]) for row in ordered_rows]
+        lower = [max(y - ci95, 0.0) for y, ci95 in zip(y_values, ci95_values)]
+        upper = [y + ci95 for y, ci95 in zip(y_values, ci95_values)]
+        ax_profile.fill_between(x_values, lower, upper, color=color, alpha=0.16, linewidth=0)
         ax_profile.plot(
-            [int(row["offset_nt"]) for row in ordered_rows],
-            [float(row[condition_value_field]) for row in ordered_rows],
+            x_values,
+            y_values,
             color=color,
-            linewidth=2.5,
+            linewidth=3.25,
             label=condition,
         )
 
@@ -406,10 +468,10 @@ def plot_metaprofile_figure(
                 jitter = [idx - 0.12 + step * i for i in range(len(values))]
             ax_exact.scatter(jitter, values, color=color, s=36, zorder=3)
             mean_value = float_mean(values)
-            sd_value = float_sd(values)
+            ci95_value = float_ci95_half_width(values)
             ax_exact.hlines(mean_value, idx - 0.18, idx + 0.18, color=color, linewidth=2.5)
-            if sd_value > 0:
-                ax_exact.vlines(idx, mean_value - sd_value, mean_value + sd_value, color=color, linewidth=1.5)
+            if ci95_value > 0:
+                ax_exact.vlines(idx, mean_value - ci95_value, mean_value + ci95_value, color=color, linewidth=1.5)
 
     ax_exact.set_xticks(range(len(condition_order)))
     ax_exact.set_xticklabels(condition_order)
@@ -444,6 +506,7 @@ def plot_results(
         shared_min_reads,
         "anchored_percent",
         "mean_anchored_percent",
+        "ci95_anchored_percent",
         "Read1 5' end offset from selected branchpoint (nt; + toward intron 3' end)",
         "Anchored shared-intron fragments (%)",
         "Branchpoint-centred 5' end metaprofile",
@@ -460,6 +523,7 @@ def plot_results(
             shared_min_reads,
             "coverage_anchored_percent",
             "mean_coverage_anchored_percent",
+            "ci95_coverage_anchored_percent",
             "Offset from selected branchpoint (nt; + toward intron 3' end)",
             "Estimated anchored-fragment coverage (%)",
             "Branchpoint-centred fragment coverage\nAssuming anchored 3' ends align to the 3' splice site",
@@ -524,10 +588,13 @@ def main():
     sample_summary_rows = []
     for sample in sample_order:
         raw_summary_row = raw_summary_by_sample[sample]
-        total_offset_counts = aggregate_offset_counts(intron_offsets_by_sample.get(sample, {}), shared_introns)
+        total_offset_counts = aggregate_offset_counts(
+            intron_offsets_by_sample.get(sample, {}),
+            shared_introns,
+            offset_range,
+        )
         total_coverage_counts = aggregate_coverage_counts(
             intron_offsets_by_sample.get(sample, {}),
-            site_counts_by_sample.get(sample, {}),
             site_metadata,
             shared_introns,
             offset_range,

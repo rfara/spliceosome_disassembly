@@ -19,10 +19,43 @@ CONDITION_COLORS = {
     "DIS": "#d95f02",
 }
 
+T_CRITICAL_95_BY_DF = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+    7: 2.365,
+    8: 2.306,
+    9: 2.262,
+    10: 2.228,
+    11: 2.201,
+    12: 2.179,
+    13: 2.160,
+    14: 2.145,
+    15: 2.131,
+    16: 2.120,
+    17: 2.110,
+    18: 2.101,
+    19: 2.093,
+    20: 2.086,
+    21: 2.080,
+    22: 2.074,
+    23: 2.069,
+    24: 2.064,
+    25: 2.060,
+    26: 2.056,
+    27: 2.052,
+    28: 2.048,
+    29: 2.045,
+    30: 2.042,
+}
+
 EVENT_SPECS = [
-    ("Mismatch", "mismatch_percent_coverage", "mean_mismatch_percent_coverage", "sem_mismatch_percent_coverage"),
-    ("Deletion", "deletion_percent_coverage", "mean_deletion_percent_coverage", "sem_deletion_percent_coverage"),
-    ("Insertion", "insertion_percent_coverage", "mean_insertion_percent_coverage", "sem_insertion_percent_coverage"),
+    ("Mismatch", "mismatch_percent_coverage", "mean_mismatch_percent_coverage", "ci95_mismatch_percent_coverage"),
+    ("Deletion", "deletion_percent_coverage", "mean_deletion_percent_coverage", "ci95_deletion_percent_coverage"),
+    ("Insertion", "insertion_percent_coverage", "mean_insertion_percent_coverage", "ci95_insertion_percent_coverage"),
 ]
 
 
@@ -100,6 +133,19 @@ def float_sem(values):
     if len(values) < 2:
         return 0.0
     return statistics.stdev(values) / math.sqrt(len(values))
+
+
+def t_critical_95(sample_size):
+    if sample_size < 2:
+        return 0.0
+    degrees_freedom = sample_size - 1
+    return T_CRITICAL_95_BY_DF.get(degrees_freedom, 1.96)
+
+
+def float_ci95_half_width(values):
+    if len(values) < 2:
+        return 0.0
+    return float_sem(values) * t_critical_95(len(values))
 
 
 def infer_sample_name_from_path(path):
@@ -188,6 +234,7 @@ def summarise_condition_profiles(metaprofile_rows, condition_order):
                 condition_row[f"mean_{field}"] = float_mean(values)
                 condition_row[f"sd_{field}"] = float_sd(values)
                 condition_row[f"sem_{field}"] = float_sem(values)
+                condition_row[f"ci95_{field}"] = float_ci95_half_width(values)
             condition_rows.append(condition_row)
     return condition_rows
 
@@ -735,7 +782,7 @@ def plot_results(
     if plot_downstream is not None:
         x_max = min(x_max, plot_downstream)
 
-    for axis, (title, sample_field, condition_field, sem_field) in zip(axes, EVENT_SPECS):
+    for axis, (title, sample_field, condition_field, ci95_field) in zip(axes, EVENT_SPECS):
         visible_y_max = 0.0
         for sample in sorted(sample_profiles):
             rows = [
@@ -766,13 +813,13 @@ def plot_results(
             color = CONDITION_COLORS.get(condition, "#4c4c4c")
             x_values = [int(row["offset_nt"]) for row in rows]
             y_values = [float(row[condition_field]) for row in rows]
-            sem_values = [float(row[sem_field]) for row in rows]
-            lower = [max(y - sem, 0.0) for y, sem in zip(y_values, sem_values)]
-            upper = [y + sem for y, sem in zip(y_values, sem_values)]
+            ci95_values = [float(row[ci95_field]) for row in rows]
+            lower = [max(y - ci95, 0.0) for y, ci95 in zip(y_values, ci95_values)]
+            upper = [y + ci95 for y, ci95 in zip(y_values, ci95_values)]
             visible_y_max = max(visible_y_max, max(upper, default=0.0))
 
-            axis.fill_between(x_values, lower, upper, color=color, alpha=0.12, linewidth=0)
-            axis.plot(x_values, y_values, color=color, linewidth=2.5, label=condition)
+            axis.fill_between(x_values, lower, upper, color=color, alpha=0.16, linewidth=0)
+            axis.plot(x_values, y_values, color=color, linewidth=3.25, label=condition)
 
         axis.axvline(0, color="#4c4c4c", linestyle="--", linewidth=1)
         axis.set_xlim(x_min, x_max)
