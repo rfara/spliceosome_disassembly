@@ -61,9 +61,22 @@ def open_text(path, mode="rt"):
     return open(path, mode)
 
 
-def read_tsv_rows(path):
+def iter_tsv_rows(path):
     with open_text(path) as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
+        reader = csv.DictReader(handle, delimiter="\t")
+        for row in reader:
+            yield row
+
+
+def read_single_tsv_row(path):
+    row_iter = iter_tsv_rows(path)
+    try:
+        row = next(row_iter)
+    except StopIteration as exc:
+        raise ValueError(f"No rows found in {path}") from exc
+    if next(row_iter, None) is not None:
+        raise ValueError(f"Expected exactly one row in {path}")
+    return row
 
 
 def write_rows(path, rows, fieldnames):
@@ -89,13 +102,34 @@ def float_sem(values):
     return statistics.stdev(values) / math.sqrt(len(values))
 
 
-def infer_sample_name(rows, path):
-    samples = {row["sample"] for row in rows if "sample" in row and row["sample"]}
-    if not samples:
-        return Path(path).name.split(".")[0]
-    if len(samples) != 1:
-        raise ValueError(f"Expected one sample in {path}, found {sorted(samples)}")
-    return next(iter(samples))
+def infer_sample_name_from_path(path):
+    return Path(path).name.split(".")[0]
+
+
+def load_site_counts(path, site_metadata):
+    sample = None
+    sample_rows = {}
+    for row in iter_tsv_rows(path):
+        row_sample = row.get("sample", "")
+        if sample is None:
+            sample = row_sample or infer_sample_name_from_path(path)
+        elif row_sample and row_sample != sample:
+            raise ValueError(f"Expected one sample in {path}, found at least {sample!r} and {row_sample!r}")
+        sample_rows[row["intron_id"]] = row
+        site_metadata.setdefault(row["intron_id"], row)
+    if sample is None:
+        sample = infer_sample_name_from_path(path)
+    return sample, sample_rows
+
+
+def map_input_paths_by_sample(paths):
+    sample_paths = {}
+    for path in paths:
+        sample = infer_sample_name_from_path(path)
+        if sample in sample_paths:
+            raise ValueError(f"Duplicate input detected for sample {sample}: {path}")
+        sample_paths[sample] = path
+    return sample_paths
 
 
 def count_value(row, field):
@@ -232,40 +266,47 @@ def build_shared_introns_rows(shared_introns, site_counts_by_sample, site_metada
     return rows, fieldnames
 
 
-def build_single_offset_indel_metrics(position_counts_by_sample, sample_order, min_coverage):
-    metrics_by_sample = {}
-    for sample in sample_order:
-        sample_metrics = {}
-        for intron_id, offset_counts in position_counts_by_sample.get(sample, {}).items():
-            max_deletion_percent = 0.0
-            max_deletion_offset = ""
-            max_insertion_percent = 0.0
-            max_insertion_offset = ""
-            for offset, counts in offset_counts.items():
-                coverage_count = counts["coverage_count"]
-                if coverage_count == 0 or coverage_count < min_coverage:
-                    continue
-                deletion_percent = counts["deletion_count"] * 100.0 / coverage_count
-                insertion_percent = counts["insertion_count"] * 100.0 / coverage_count
-                if deletion_percent > max_deletion_percent:
-                    max_deletion_percent = deletion_percent
-                    max_deletion_offset = offset
-                if insertion_percent > max_insertion_percent:
-                    max_insertion_percent = insertion_percent
-                    max_insertion_offset = offset
-            sample_metrics[intron_id] = {
-                "max_deletion_percent": max_deletion_percent,
-                "max_deletion_offset": max_deletion_offset,
-                "max_insertion_percent": max_insertion_percent,
-                "max_insertion_offset": max_insertion_offset,
-            }
-        metrics_by_sample[sample] = sample_metrics
-    return metrics_by_sample
+def build_single_offset_indel_metrics_for_path(path, min_coverage):
+    sample = None
+    sample_metrics = {}
+    for row in iter_tsv_rows(path):
+        row_sample = row.get("sample", "")
+        if sample is None:
+            sample = row_sample or infer_sample_name_from_path(path)
+        elif row_sample and row_sample != sample:
+            raise ValueError(f"Expected one sample in {path}, found at least {sample!r} and {row_sample!r}")
+
+        intron_metrics = sample_metrics.setdefault(
+            row["intron_id"],
+            {
+                "max_deletion_percent": 0.0,
+                "max_deletion_offset": "",
+                "max_insertion_percent": 0.0,
+                "max_insertion_offset": "",
+            },
+        )
+        coverage_count = int(row["coverage_count"])
+        if coverage_count == 0 or coverage_count < min_coverage:
+            continue
+
+        offset = int(row["offset_nt"])
+        deletion_percent = int(row["deletion_count"]) * 100.0 / coverage_count
+        insertion_percent = int(row["insertion_count"]) * 100.0 / coverage_count
+        if deletion_percent > intron_metrics["max_deletion_percent"]:
+            intron_metrics["max_deletion_percent"] = deletion_percent
+            intron_metrics["max_deletion_offset"] = offset
+        if insertion_percent > intron_metrics["max_insertion_percent"]:
+            intron_metrics["max_insertion_percent"] = insertion_percent
+            intron_metrics["max_insertion_offset"] = offset
+
+    if sample is None:
+        sample = infer_sample_name_from_path(path)
+    return sample, sample_metrics
 
 
 def build_readthrough_blacklist(
     site_counts_by_sample,
-    position_counts_by_sample,
+    single_offset_indel_metrics_by_sample,
     site_metadata,
     sample_order,
     min_samples,
@@ -278,11 +319,6 @@ def build_readthrough_blacklist(
     single_offset_deletion_percent_threshold,
     single_offset_insertion_percent_threshold,
 ):
-    single_offset_indel_metrics = build_single_offset_indel_metrics(
-        position_counts_by_sample,
-        sample_order,
-        single_offset_min_coverage,
-    )
     fieldnames = [
         "intron_id",
         "gene_id",
@@ -375,7 +411,7 @@ def build_readthrough_blacklist(
 
         for sample in sample_order:
             sample_row = site_counts_by_sample.get(sample, {}).get(intron_id, {})
-            single_offset_metrics = single_offset_indel_metrics.get(sample, {}).get(intron_id, {})
+            single_offset_metrics = single_offset_indel_metrics_by_sample.get(sample, {}).get(intron_id, {})
             traversing_fragments = count_value(sample_row, "traversing_fragments")
             deletion_percent = float_value(sample_row, "deletion_events_per_100_covered_positions")
             insertion_percent = float_value(sample_row, "insertion_events_per_100_covered_positions")
@@ -559,15 +595,31 @@ def build_filter_summary_row(
     return row
 
 
-def aggregate_position_counts(position_counts, shared_introns):
+def aggregate_position_counts_from_path(path, shared_introns):
+    sample = None
     totals = defaultdict(Counter)
-    for intron_id in shared_introns:
-        for offset, counts in position_counts.get(intron_id, {}).items():
-            totals[offset]["coverage_count"] += counts["coverage_count"]
-            totals[offset]["mismatch_count"] += counts["mismatch_count"]
-            totals[offset]["deletion_count"] += counts["deletion_count"]
-            totals[offset]["insertion_count"] += counts["insertion_count"]
-    return totals
+    observed_offsets = set()
+    for row in iter_tsv_rows(path):
+        row_sample = row.get("sample", "")
+        if sample is None:
+            sample = row_sample or infer_sample_name_from_path(path)
+        elif row_sample and row_sample != sample:
+            raise ValueError(f"Expected one sample in {path}, found at least {sample!r} and {row_sample!r}")
+
+        offset = int(row["offset_nt"])
+        observed_offsets.add(offset)
+        if row["intron_id"] not in shared_introns:
+            continue
+
+        counts = totals[offset]
+        counts["coverage_count"] += int(row["coverage_count"])
+        counts["mismatch_count"] += int(row["mismatch_count"])
+        counts["deletion_count"] += int(row["deletion_count"])
+        counts["insertion_count"] += int(row["insertion_count"])
+
+    if sample is None:
+        sample = infer_sample_name_from_path(path)
+    return sample, totals, observed_offsets
 
 
 def build_sample_metaprofile_rows(sample, condition, traversing_fragments, offset_range, total_counts):
@@ -753,10 +805,7 @@ def main():
     raw_summary_rows = []
     condition_order = []
     for path in args.summaries:
-        rows = read_tsv_rows(path)
-        if len(rows) != 1:
-            raise ValueError(f"Expected exactly one summary row in {path}")
-        row = rows[0]
+        row = read_single_tsv_row(path)
         raw_summary_rows.append(row)
         if row["condition"] not in condition_order:
             condition_order.append(row["condition"])
@@ -767,48 +816,50 @@ def main():
     site_counts_by_sample = {}
     site_metadata = {}
     for path in args.site_counts:
-        rows = read_tsv_rows(path)
-        sample = infer_sample_name(rows, path)
-        sample_rows = {}
-        for row in rows:
-            sample_rows[row["intron_id"]] = row
-            site_metadata.setdefault(row["intron_id"], row)
+        sample, sample_rows = load_site_counts(path, site_metadata)
         site_counts_by_sample[sample] = sample_rows
-
-    position_counts_by_sample = {}
-    offset_range = set()
-    for path in args.position_counts:
-        rows = read_tsv_rows(path)
-        sample = infer_sample_name(rows, path)
-        sample_counts = defaultdict(Counter)
-        for row in rows:
-            offset = int(row["offset_nt"])
-            sample_counts[row["intron_id"]][offset] = {
-                "coverage_count": int(row["coverage_count"]),
-                "mismatch_count": int(row["mismatch_count"]),
-                "deletion_count": int(row["deletion_count"]),
-                "insertion_count": int(row["insertion_count"]),
-            }
-            offset_range.add(offset)
-        position_counts_by_sample[sample] = sample_counts
-    offset_range = sorted(offset_range)
+    position_count_paths_by_sample = map_input_paths_by_sample(args.position_counts)
+    missing_site_counts = [sample for sample in sample_order if sample not in site_counts_by_sample]
+    if missing_site_counts:
+        raise ValueError(f"Missing site-count inputs for samples: {', '.join(missing_site_counts)}")
+    missing_position_counts = [sample for sample in sample_order if sample not in position_count_paths_by_sample]
+    if missing_position_counts:
+        raise ValueError(f"Missing position-count inputs for samples: {', '.join(missing_position_counts)}")
 
     raw_shared_introns = build_shared_intron_set(site_counts_by_sample, sample_order, args.shared_min_reads)
-    blacklist_introns, blacklist_rows, blacklist_fieldnames, reason_counter = build_readthrough_blacklist(
-        site_counts_by_sample,
-        position_counts_by_sample,
-        site_metadata,
-        sample_order,
-        args.blacklist_min_samples,
-        args.blacklist_min_traversing_fragments,
-        args.blacklist_deletion_percent_threshold,
-        args.blacklist_insertion_percent_threshold,
-        args.max_total_indel_percent_any_sample,
-        args.blacklist_single_offset_min_samples,
-        args.blacklist_single_offset_min_coverage,
-        args.blacklist_single_offset_deletion_percent_threshold,
-        args.blacklist_single_offset_insertion_percent_threshold,
-    )
+    blacklist_introns = set()
+    blacklist_rows = []
+    blacklist_fieldnames = []
+    reason_counter = Counter()
+    if args.output_blacklist and args.output_filter_summary:
+        single_offset_indel_metrics_by_sample = {}
+        for sample in sample_order:
+            loaded_sample, sample_metrics = build_single_offset_indel_metrics_for_path(
+                position_count_paths_by_sample[sample],
+                args.blacklist_single_offset_min_coverage,
+            )
+            if loaded_sample != sample:
+                raise ValueError(
+                    f"Position-count input sample mismatch for {position_count_paths_by_sample[sample]}: "
+                    f"expected {sample}, found {loaded_sample}"
+                )
+            single_offset_indel_metrics_by_sample[sample] = sample_metrics
+
+        blacklist_introns, blacklist_rows, blacklist_fieldnames, reason_counter = build_readthrough_blacklist(
+            site_counts_by_sample,
+            single_offset_indel_metrics_by_sample,
+            site_metadata,
+            sample_order,
+            args.blacklist_min_samples,
+            args.blacklist_min_traversing_fragments,
+            args.blacklist_deletion_percent_threshold,
+            args.blacklist_insertion_percent_threshold,
+            args.max_total_indel_percent_any_sample,
+            args.blacklist_single_offset_min_samples,
+            args.blacklist_single_offset_min_coverage,
+            args.blacklist_single_offset_deletion_percent_threshold,
+            args.blacklist_single_offset_insertion_percent_threshold,
+        )
     shared_introns = raw_shared_introns.difference(blacklist_introns)
     if not shared_introns:
         raise ValueError("No shared introns retained for branchpoint readthrough event aggregation")
@@ -820,11 +871,27 @@ def main():
         sample_order,
     )
 
+    sample_total_counts = {}
+    offset_range = set()
+    for sample in sample_order:
+        loaded_sample, total_counts, observed_offsets = aggregate_position_counts_from_path(
+            position_count_paths_by_sample[sample],
+            shared_introns,
+        )
+        if loaded_sample != sample:
+            raise ValueError(
+                f"Position-count input sample mismatch for {position_count_paths_by_sample[sample]}: "
+                f"expected {sample}, found {loaded_sample}"
+            )
+        sample_total_counts[sample] = total_counts
+        offset_range.update(observed_offsets)
+    offset_range = sorted(offset_range)
+
     sample_profile_rows = []
     sample_summary_rows = []
     for sample in sample_order:
         raw_summary_row = raw_summary_by_sample[sample]
-        total_counts = aggregate_position_counts(position_counts_by_sample.get(sample, {}), shared_introns)
+        total_counts = sample_total_counts[sample]
         traversing_fragments = sum(
             count_value(site_counts_by_sample.get(sample, {}).get(intron_id, {}), "traversing_fragments")
             for intron_id in shared_introns
