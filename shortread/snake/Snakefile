@@ -22,6 +22,26 @@ def repo_path(path_string):
     return str((REPO_ROOT / path).resolve())
 
 
+def resolve_existing_path(*candidates, label="path"):
+    tried = []
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        if isinstance(candidate, (list, tuple)):
+            candidate_iter = candidate
+        else:
+            candidate_iter = [candidate]
+
+        for candidate_path in candidate_iter:
+            resolved = repo_path(candidate_path)
+            tried.append(resolved)
+            if Path(resolved).exists():
+                return resolved
+
+    tried_text = ", ".join(tried) if tried else "<none>"
+    raise FileNotFoundError(f"Could not find an existing file for {label}. Tried: {tried_text}")
+
+
 def results_path(*parts):
     return str((RESULTS_DIR.joinpath(*parts)).resolve())
 
@@ -52,6 +72,17 @@ STAR_INDEX_DIR = results_path("reference", "star_genome")
 SLURM_TIME_LIMITS = config["slurm"]["time_limits"]
 BRANCHPOINT_GTF = repo_path(BRANCHPOINT_CFG["mane_gtf"])
 BRANCHPOINT_SCORE_FILE = repo_path(BRANCHPOINT_CFG["branchpoints"])
+BRANCHPOINT_SEQUENCE_CONTEXT_GENOME_FASTA = resolve_existing_path(
+    BRANCHPOINT_CFG.get("sequence_context_genome_fasta"),
+    config["references"]["genome_fasta"],
+    label="branchpoint sequence-context genome FASTA",
+)
+BRANCHPOINT_RELATIVE_FEATURE_GENOME_FASTA = resolve_existing_path(
+    BRANCHPOINT_CFG.get("relative_feature_genome_fasta"),
+    BRANCHPOINT_CFG.get("sequence_context_genome_fasta"),
+    config["references"]["genome_fasta"],
+    label="branchpoint relative-feature genome FASTA",
+)
 BRANCHPOINT_REFERENCE = results_path("branchpoints", "reference", "mane_select_top_branchpoints.tsv")
 BRANCHPOINT_SAMPLE_METAPROFILE = results_path("branchpoints", "samples", "{sample}.metaprofile.tsv")
 BRANCHPOINT_SAMPLE_SUMMARY = results_path("branchpoints", "samples", "{sample}.summary.tsv")
@@ -1489,7 +1520,7 @@ rule aggregate_branchpoint_profiles:
         three_prime_coverage_args=lambda wildcards, input: " ".join(
             f"--three-prime-coverage {shlex.quote(path)}" for path in input.three_prime_coverages
         ),
-        genome_fasta=repo_path(BRANCHPOINT_CFG["sequence_context_genome_fasta"]),
+        genome_fasta=BRANCHPOINT_SEQUENCE_CONTEXT_GENOME_FASTA,
         canonical_branchpoint_motif=BRANCHPOINT_CFG.get("canonical_branchpoint_motif", "YUNAY"),
         plot_upstream=BRANCHPOINT_CFG.get("plot_upstream", 50),
         plot_downstream=BRANCHPOINT_CFG.get("plot_downstream", 10),
@@ -1856,7 +1887,7 @@ rule analyze_branchpoint_sequence_context:
         site_count_args=lambda wildcards, input: " ".join(
             f"--site-counts {shlex.quote(path)}" for path in input.site_counts
         ),
-        genome_fasta=repo_path(BRANCHPOINT_CFG["sequence_context_genome_fasta"]),
+        genome_fasta=BRANCHPOINT_SEQUENCE_CONTEXT_GENOME_FASTA,
         signal_field=BRANCHPOINT_CFG.get("sequence_context_signal_field", "zero_or_plus_one_branchpoint_fragments"),
         control_condition=BRANCHPOINT_CFG.get("sequence_context_control_condition", "ILS"),
         query_condition=BRANCHPOINT_CFG.get("sequence_context_query_condition", "DIS"),
@@ -1936,9 +1967,7 @@ rule analyze_relative_branching_features:
         site_count_args=lambda wildcards, input: " ".join(
             f"--site-counts {shlex.quote(path)}" for path in input.site_counts
         ),
-        genome_fasta=repo_path(
-            BRANCHPOINT_CFG.get("relative_feature_genome_fasta", BRANCHPOINT_CFG["sequence_context_genome_fasta"])
-        ),
+        genome_fasta=BRANCHPOINT_RELATIVE_FEATURE_GENOME_FASTA,
         signal_field=BRANCHPOINT_CFG.get("relative_feature_signal_field", "zero_or_plus_one_branchpoint_fragments"),
         control_condition=BRANCHPOINT_CFG.get("relative_feature_control_condition", "ILS"),
         query_condition=BRANCHPOINT_CFG.get("relative_feature_query_condition", "DIS"),

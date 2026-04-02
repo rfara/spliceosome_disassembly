@@ -86,7 +86,7 @@ branchpoint_analysis:
   heterogeneity_condition_min_reads: 20
   heterogeneity_bootstraps: 500
   heterogeneity_seed: 1
-  sequence_context_genome_fasta: /Users/rupert.faraway/bio/reference/hs/fa/GRCh38.primary_assembly.genome.fa
+  sequence_context_genome_fasta: /Users/rupert.faraway/bio/reference/hs/fa/GRCh38.primary_assembly.genome.fa # Falls back to references.genome_fasta if unavailable. Can also be a YAML list of candidate paths.
   sequence_context_signal_field: zero_or_plus_one_branchpoint_fragments
   sequence_context_control_condition: ILS
   sequence_context_query_condition: DIS
@@ -97,7 +97,7 @@ branchpoint_analysis:
   sequence_context_five_prime_intron_bases: 6
   sequence_context_decile_fraction: 0.1
   sequence_context_require_bp_center_base: A
-  relative_feature_genome_fasta: /Users/rupert.faraway/bio/reference/hs/fa/GRCh38.primary_assembly.genome.fa
+  relative_feature_genome_fasta: /Users/rupert.faraway/bio/reference/hs/fa/GRCh38.primary_assembly.genome.fa # Falls back to sequence_context_genome_fasta then references.genome_fasta if unavailable. Can also be a YAML list of candidate paths.
   relative_feature_signal_field: zero_or_plus_one_branchpoint_fragments
   relative_feature_control_condition: ILS
   relative_feature_query_condition: DIS
