@@ -110,6 +110,12 @@ branchpoint_analysis:
   relative_feature_three_prime_window: 20
   relative_feature_residual_quantile_fraction: 0.1
 
+premrna_analysis:
+  mane_gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz
+  metaprofile_upstream: 200
+  metaprofile_downstream: 200
+  shared_min_total_reads_all_samples: 10
+
 slurm:
   time_limits:
     short: "08:00:00"
@@ -128,6 +134,9 @@ resources:
   bam_qc_threads: 2
   rna_content_threads: 4
   snrna_count_threads: 2
+  premrna_reference_threads: 1
+  premrna_quant_threads: 2
+  premrna_aggregate_threads: 1
   branchpoint_reference_threads: 1
   branchpoint_quant_threads: 1
   branchpoint_aggregate_threads: 1

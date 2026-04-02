@@ -80,6 +80,46 @@ To help diagnose STAR `too short` failures, the workflow also keeps STAR `Unmapp
 
 The summary table reports per-mate length quantiles plus the most common 12 nt prefixes and suffixes, which is usually enough to spot short inserts, residual adapters, or repetitive terminal sequence.
 
+## pre-mRNA versus mRNA analysis
+
+The workflow also includes a MANE Select pre-mRNA versus mRNA analysis built from the deduplicated genome BAMs in `shortread/snake/results/dedup`.
+
+It:
+
+1. derives MANE Select protein-coding transcript models from `annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz`
+2. keeps one strand-aware gene model per MANE Select transcript, including exon spans, intron spans, and the transcript 3' end
+3. uses deduplicated paired fragments and the stranded library orientation for same-sense gene assignment
+4. counts a fragment as `intronic` when it overlaps a MANE intron for one uniquely assigned same-strand gene and does not overlap a same-strand small ncRNA gene
+5. counts a fragment as `mRNA` when it overlaps exons for one uniquely assigned same-strand MANE gene and does not overlap that gene's introns
+6. treats exon-intron boundary fragments as `intronic`, while junction-spanning spliced fragments remain `mRNA`
+7. excludes same-sense overlapping-gene assignments as ambiguous
+8. profiles exonic aligned-base coverage in a `-200..+200 nt` window around the strand-aware MANE transcript 3' end
+9. restricts the combined comparison to genes with at least `10` total gene fragments (`intronic + mRNA`) in every sample
+10. normalizes the metaprofile by the total shared-gene fragment count in each sample and plots condition means with shaded 95% confidence intervals
+
+You can run just this analysis from the repository root with:
+
+```bash
+snakemake -s shortread/snake/Snakefile \
+  --cores 4 \
+  --use-conda \
+  shortread/snake/results/premrna/combined/three_prime_exonic_coverage_metaprofile.png
+```
+
+Main outputs:
+
+- `shortread/snake/results/premrna/reference/annotation.pkl`
+- `shortread/snake/results/premrna/samples/{sample}.gene_counts.tsv.gz`
+- `shortread/snake/results/premrna/samples/{sample}.three_prime_exonic_coverage.tsv.gz`
+- `shortread/snake/results/premrna/samples/{sample}.summary.tsv`
+- `shortread/snake/results/premrna/combined/shared_genes.tsv`
+- `shortread/snake/results/premrna/combined/three_prime_exonic_coverage.by_sample.tsv`
+- `shortread/snake/results/premrna/combined/three_prime_exonic_coverage.by_condition.tsv`
+- `shortread/snake/results/premrna/combined/summary.by_sample.tsv`
+- `shortread/snake/results/premrna/combined/summary.by_condition.tsv`
+- `shortread/snake/results/premrna/combined/intronic_vs_mrna_summary.png`
+- `shortread/snake/results/premrna/combined/three_prime_exonic_coverage_metaprofile.png`
+
 ## Branchpoint 5' end analysis
 
 The workflow now includes a branchpoint-centred analysis built from the deduplicated genome BAMs in `shortread/snake/results/dedup`.

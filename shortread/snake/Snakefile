@@ -56,6 +56,7 @@ def benchmark_path(*parts):
 
 SAMPLES = list(config["samples"].keys())
 BRANCHPOINT_CFG = config["branchpoint_analysis"]
+PREMRNA_CFG = config["premrna_analysis"]
 
 BT2_SUFFIXES = [
     ".1.bt2",
@@ -71,6 +72,7 @@ SNRNA_INDEX_PREFIX = results_path("reference", "snrna", "snrna")
 STAR_INDEX_DIR = results_path("reference", "star_genome")
 SLURM_TIME_LIMITS = config["slurm"]["time_limits"]
 BRANCHPOINT_GTF = repo_path(BRANCHPOINT_CFG["mane_gtf"])
+PREMRNA_GTF = repo_path(PREMRNA_CFG.get("mane_gtf", BRANCHPOINT_CFG["mane_gtf"]))
 BRANCHPOINT_SCORE_FILE = repo_path(BRANCHPOINT_CFG["branchpoints"])
 BRANCHPOINT_SEQUENCE_CONTEXT_GENOME_FASTA = resolve_existing_path(
     BRANCHPOINT_CFG.get("sequence_context_genome_fasta"),
@@ -298,6 +300,35 @@ BRANCHPOINT_RELATIVE_FEATURES_PLOT_PNG = results_path("branchpoints", "relative_
 BRANCHPOINT_RELATIVE_FEATURES_PLOT_PDF = results_path("branchpoints", "relative_branching_features", "relative_branching_features.pdf")
 BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PNG = results_path("branchpoints", "relative_branching_features", "feature_distributions.png")
 BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PDF = results_path("branchpoints", "relative_branching_features", "feature_distributions.pdf")
+PREMRNA_REFERENCE = results_path("premrna", "reference", "annotation.pkl")
+PREMRNA_SAMPLE_GENE_COUNTS = results_path("premrna", "samples", "{sample}.gene_counts.tsv.gz")
+PREMRNA_SAMPLE_COVERAGE = results_path("premrna", "samples", "{sample}.three_prime_exonic_coverage.tsv.gz")
+PREMRNA_SAMPLE_SUMMARY = results_path("premrna", "samples", "{sample}.summary.tsv")
+PREMRNA_COMBINED_METAPROFILE_BY_SAMPLE = results_path(
+    "premrna",
+    "combined",
+    "three_prime_exonic_coverage.by_sample.tsv",
+)
+PREMRNA_COMBINED_METAPROFILE_BY_CONDITION = results_path(
+    "premrna",
+    "combined",
+    "three_prime_exonic_coverage.by_condition.tsv",
+)
+PREMRNA_COMBINED_SUMMARY_BY_SAMPLE = results_path("premrna", "combined", "summary.by_sample.tsv")
+PREMRNA_COMBINED_SUMMARY_BY_CONDITION = results_path("premrna", "combined", "summary.by_condition.tsv")
+PREMRNA_COMBINED_SHARED_GENES = results_path("premrna", "combined", "shared_genes.tsv")
+PREMRNA_COMBINED_SUMMARY_PLOT_PNG = results_path("premrna", "combined", "intronic_vs_mrna_summary.png")
+PREMRNA_COMBINED_SUMMARY_PLOT_PDF = results_path("premrna", "combined", "intronic_vs_mrna_summary.pdf")
+PREMRNA_COMBINED_METAPROFILE_PLOT_PNG = results_path(
+    "premrna",
+    "combined",
+    "three_prime_exonic_coverage_metaprofile.png",
+)
+PREMRNA_COMBINED_METAPROFILE_PLOT_PDF = results_path(
+    "premrna",
+    "combined",
+    "three_prime_exonic_coverage_metaprofile.pdf",
+)
 RNA_CONTENT_REFERENCE = results_path("reference", "rna_content", "annotation.pkl")
 BAM_QC_STAGES = {
     "premap_rrna": results_path("premap_rrna", "{sample}.rrna.bam"),
@@ -450,6 +481,9 @@ WORKFLOW_DIRS = [
     results_path("premap_snrna"),
     results_path("star"),
     results_path("dedup"),
+    results_path("premrna", "reference"),
+    results_path("premrna", "samples"),
+    results_path("premrna", "combined"),
     results_path("branchpoints", "reference"),
     results_path("branchpoints", "samples"),
     results_path("branchpoints", "combined"),
@@ -484,6 +518,9 @@ WORKFLOW_DIRS = [
     log_path("star_index"),
     log_path("dedup"),
     log_path("dedup_index"),
+    log_path("premrna_reference"),
+    log_path("premrna_quantify"),
+    log_path("premrna_aggregate"),
     log_path("rna_content_reference"),
     log_path("qc_fastqc"),
     log_path("qc_bam"),
@@ -505,6 +542,9 @@ WORKFLOW_DIRS = [
     benchmark_path("star_index"),
     benchmark_path("dedup"),
     benchmark_path("dedup_index"),
+    benchmark_path("premrna_reference"),
+    benchmark_path("premrna_quantify"),
+    benchmark_path("premrna_aggregate"),
     benchmark_path("rna_content_reference"),
     benchmark_path("qc_fastqc"),
     benchmark_path("qc_bam"),
@@ -543,6 +583,19 @@ rule all:
         expand(results_path("qc", "bam", "{stage}", "{sample}.flagstat.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
         expand(results_path("qc", "bam", "{stage}", "{sample}.stats.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
         expand(results_path("qc", "snrna_counts", "{sample}.snrna_counts.tsv"), sample=SAMPLES),
+        PREMRNA_REFERENCE,
+        expand(PREMRNA_SAMPLE_GENE_COUNTS, sample=SAMPLES),
+        expand(PREMRNA_SAMPLE_COVERAGE, sample=SAMPLES),
+        expand(PREMRNA_SAMPLE_SUMMARY, sample=SAMPLES),
+        PREMRNA_COMBINED_METAPROFILE_BY_SAMPLE,
+        PREMRNA_COMBINED_METAPROFILE_BY_CONDITION,
+        PREMRNA_COMBINED_SUMMARY_BY_SAMPLE,
+        PREMRNA_COMBINED_SUMMARY_BY_CONDITION,
+        PREMRNA_COMBINED_SHARED_GENES,
+        PREMRNA_COMBINED_SUMMARY_PLOT_PNG,
+        PREMRNA_COMBINED_SUMMARY_PLOT_PDF,
+        PREMRNA_COMBINED_METAPROFILE_PLOT_PNG,
+        PREMRNA_COMBINED_METAPROFILE_PLOT_PDF,
         BRANCHPOINT_REFERENCE,
         expand(BRANCHPOINT_SAMPLE_METAPROFILE, sample=SAMPLES),
         expand(BRANCHPOINT_SAMPLE_SUMMARY, sample=SAMPLES),
@@ -1365,6 +1418,158 @@ rule index_deduplicated_bam:
         set -euo pipefail
         mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "{params.benchmark_dir}"
         samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
+        """
+
+
+rule build_premrna_reference:
+    input:
+        init=INIT_SENTINEL,
+        gtf=PREMRNA_GTF
+    output:
+        reference=PREMRNA_REFERENCE
+    log:
+        log_path("premrna_reference", "build.log")
+    benchmark:
+        benchmark_path("premrna_reference", "build.tsv")
+    threads: config["resources"]["premrna_reference_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "build_premrna_reference.py").resolve()),
+        benchmark_dir=str(Path(benchmark_path("premrna_reference", "build.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "premrna_ref",
+            log_path("slurm", "premrna_ref.%A.log"),
+            config["resources"]["premrna_reference_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.reference})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --gtf {input.gtf} \
+          --output {output.reference} \
+          > {log} 2>&1
+        """
+
+
+rule quantify_premrna_mrna:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("dedup", "{sample}.dedup.bam"),
+        bai=results_path("dedup", "{sample}.dedup.bam.bai"),
+        reference=PREMRNA_REFERENCE
+    output:
+        gene_counts=PREMRNA_SAMPLE_GENE_COUNTS,
+        coverage=PREMRNA_SAMPLE_COVERAGE,
+        summary=PREMRNA_SAMPLE_SUMMARY
+    log:
+        log_path("premrna_quantify", "{sample}.log")
+    benchmark:
+        benchmark_path("premrna_quantify", "{sample}.tsv")
+    threads: config["resources"]["premrna_quant_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "quantify_premrna_mrna.py").resolve()),
+        condition=lambda wildcards: sample_condition(wildcards.sample),
+        metaprofile_upstream=PREMRNA_CFG["metaprofile_upstream"],
+        metaprofile_downstream=PREMRNA_CFG["metaprofile_downstream"],
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("premrna_quantify", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "m_medium",
+            "24G",
+            "premrna_quant",
+            log_path("slurm", f"premrna_quant.{wildcards.sample}.%A.log"),
+            config["resources"]["premrna_quant_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.gene_counts})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --bam {input.bam} \
+          --reference {input.reference} \
+          --sample {wildcards.sample} \
+          --condition {params.condition} \
+          --threads {threads} \
+          --metaprofile-upstream {params.metaprofile_upstream} \
+          --metaprofile-downstream {params.metaprofile_downstream} \
+          --output-gene-counts {output.gene_counts} \
+          --output-coverage {output.coverage} \
+          --output-summary {output.summary} \
+          > {log} 2>&1
+        """
+
+
+rule aggregate_premrna_mrna:
+    input:
+        init=INIT_SENTINEL,
+        gene_counts=expand(PREMRNA_SAMPLE_GENE_COUNTS, sample=SAMPLES),
+        coverages=expand(PREMRNA_SAMPLE_COVERAGE, sample=SAMPLES),
+        summaries=expand(PREMRNA_SAMPLE_SUMMARY, sample=SAMPLES)
+    output:
+        metaprofile_by_sample=PREMRNA_COMBINED_METAPROFILE_BY_SAMPLE,
+        metaprofile_by_condition=PREMRNA_COMBINED_METAPROFILE_BY_CONDITION,
+        summary_by_sample=PREMRNA_COMBINED_SUMMARY_BY_SAMPLE,
+        summary_by_condition=PREMRNA_COMBINED_SUMMARY_BY_CONDITION,
+        shared_genes=PREMRNA_COMBINED_SHARED_GENES,
+        summary_plot_png=PREMRNA_COMBINED_SUMMARY_PLOT_PNG,
+        summary_plot_pdf=PREMRNA_COMBINED_SUMMARY_PLOT_PDF,
+        metaprofile_plot_png=PREMRNA_COMBINED_METAPROFILE_PLOT_PNG,
+        metaprofile_plot_pdf=PREMRNA_COMBINED_METAPROFILE_PLOT_PDF
+    log:
+        log_path("premrna_aggregate", "combined.log")
+    benchmark:
+        benchmark_path("premrna_aggregate", "combined.tsv")
+    threads: config["resources"]["premrna_aggregate_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "aggregate_premrna_mrna.py").resolve()),
+        gene_count_args=lambda wildcards, input: " ".join(
+            f"--gene-counts {shlex.quote(path)}" for path in input.gene_counts
+        ),
+        coverage_args=lambda wildcards, input: " ".join(
+            f"--coverage {shlex.quote(path)}" for path in input.coverages
+        ),
+        summary_args=lambda wildcards, input: " ".join(
+            f"--summary {shlex.quote(path)}" for path in input.summaries
+        ),
+        plot_upstream=PREMRNA_CFG["metaprofile_upstream"],
+        plot_downstream=PREMRNA_CFG["metaprofile_downstream"],
+        shared_min_total_reads=PREMRNA_CFG["shared_min_total_reads_all_samples"],
+        benchmark_dir=str(Path(benchmark_path("premrna_aggregate", "combined.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "premrna_agg",
+            log_path("slurm", "premrna_agg.%A.log"),
+            config["resources"]["premrna_aggregate_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.metaprofile_by_sample})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.gene_count_args} \
+          {params.coverage_args} \
+          {params.summary_args} \
+          --plot-upstream {params.plot_upstream} \
+          --plot-downstream {params.plot_downstream} \
+          --shared-min-total-reads {params.shared_min_total_reads} \
+          --output-metaprofile-by-sample {output.metaprofile_by_sample} \
+          --output-metaprofile-by-condition {output.metaprofile_by_condition} \
+          --output-summary-by-sample {output.summary_by_sample} \
+          --output-summary-by-condition {output.summary_by_condition} \
+          --output-shared-genes {output.shared_genes} \
+          --output-summary-plot-png {output.summary_plot_png} \
+          --output-summary-plot-pdf {output.summary_plot_pdf} \
+          --output-metaprofile-plot-png {output.metaprofile_plot_png} \
+          --output-metaprofile-plot-pdf {output.metaprofile_plot_pdf} \
+          > {log} 2>&1
         """
 
 
