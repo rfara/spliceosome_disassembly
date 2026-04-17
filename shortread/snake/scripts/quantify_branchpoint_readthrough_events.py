@@ -41,14 +41,27 @@ def parse_args():
     parser.add_argument("--reference", required=True)
     parser.add_argument("--sample", required=True)
     parser.add_argument("--condition", required=True)
-    parser.add_argument("--anchor-window", type=int, required=True)
+    parser.add_argument("--anchor-window", type=int)
+    parser.add_argument("--anchor-upstream", type=int)
+    parser.add_argument("--anchor-downstream", type=int)
     parser.add_argument("--profile-upstream", type=int, required=True)
     parser.add_argument("--profile-downstream", type=int, required=True)
     parser.add_argument("--output-site-counts", required=True)
     parser.add_argument("--output-position-counts", required=True)
     parser.add_argument("--output-metaprofile", required=True)
     parser.add_argument("--output-summary", required=True)
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.anchor_window is None and (args.anchor_upstream is None or args.anchor_downstream is None):
+        parser.error("Provide --anchor-window or both --anchor-upstream and --anchor-downstream")
+
+    args.anchor_upstream = args.anchor_window if args.anchor_upstream is None else args.anchor_upstream
+    args.anchor_downstream = args.anchor_window if args.anchor_downstream is None else args.anchor_downstream
+
+    if args.anchor_upstream < 0 or args.anchor_downstream < 0:
+        parser.error("Anchor upstream/downstream limits must be non-negative")
+
+    return args
 
 
 def open_text(path, mode="rt"):
@@ -57,7 +70,13 @@ def open_text(path, mode="rt"):
     return open(path, mode)
 
 
-def load_reference(path, anchor_window):
+def oriented_position_from_offset(feature_position, offset, strand):
+    if strand == "+":
+        return feature_position + offset
+    return feature_position - offset
+
+
+def load_reference(path, anchor_upstream, anchor_downstream):
     introns = {}
     anchor_index = defaultdict(list)
 
@@ -83,7 +102,8 @@ def load_reference(path, anchor_window):
                 branchpoint_candidates=int(row["branchpoint_candidates"]),
             )
             introns[intron.intron_id] = intron
-            for position in range(intron.three_prime_ss - anchor_window, intron.three_prime_ss + anchor_window + 1):
+            for offset in range(-anchor_upstream, anchor_downstream + 1):
+                position = oriented_position_from_offset(intron.three_prime_ss, offset, intron.strand)
                 anchor_index[(intron.chrom, intron.strand, position)].append(intron.intron_id)
 
     return introns, anchor_index
@@ -407,7 +427,7 @@ def write_summary(path, summary_row):
 
 def main():
     args = parse_args()
-    introns, anchor_index = load_reference(args.reference, args.anchor_window)
+    introns, anchor_index = load_reference(args.reference, args.anchor_upstream, args.anchor_downstream)
 
     counters = Counter()
     coverage_counts = Counter()
@@ -530,7 +550,9 @@ def main():
         "sample": args.sample,
         "condition": args.condition,
         "reference_introns": len(introns),
-        "anchor_window_nt": args.anchor_window,
+        "anchor_window_nt": max(args.anchor_upstream, args.anchor_downstream),
+        "anchor_upstream_nt": args.anchor_upstream,
+        "anchor_downstream_nt": args.anchor_downstream,
         "profile_upstream_nt": args.profile_upstream,
         "profile_downstream_nt": args.profile_downstream,
         "read1_records_examined": counters["read1_records_examined"],
@@ -599,6 +621,7 @@ def main():
 
     print(f"Sample: {args.sample}")
     print(f"Condition: {args.condition}")
+    print(f"Anchor window: -{args.anchor_upstream}..+{args.anchor_downstream} nt from 3'SS")
     print(f"Library fragments: {counters['library_fragments']}")
     print(f"Anchored fragments: {counters['anchored_fragments']}")
     print(f"Traversing fragments: {counters['traversing_fragments']}")

@@ -154,6 +154,104 @@ BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PDF = results_path(
     "combined",
     "three_prime_ss_coverage_metaprofile.pdf",
 )
+BRANCHPOINT_COMBINED_ANCHORED_ENRICHMENT_HISTOGRAM_PNG = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_enrichment_log2_fold_change.histogram.png",
+)
+BRANCHPOINT_COMBINED_ANCHORED_ENRICHMENT_HISTOGRAM_PDF = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_enrichment_log2_fold_change.histogram.pdf",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_SAMPLE = results_path(
+    "branchpoints",
+    "downstream_exon",
+    "metaprofile.by_sample.tsv",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION = results_path(
+    "branchpoints",
+    "downstream_exon",
+    "metaprofile.by_condition.tsv",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_SAMPLE = results_path(
+    "branchpoints",
+    "downstream_exon",
+    "summary.by_sample.tsv",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_CONDITION = results_path(
+    "branchpoints",
+    "downstream_exon",
+    "summary.by_condition.tsv",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_COVERAGE_PLOT_PNG = results_path(
+    "branchpoints",
+    "downstream_exon",
+    "branchpoint_coverage_metaprofile.png",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_COVERAGE_PLOT_PDF = results_path(
+    "branchpoints",
+    "downstream_exon",
+    "branchpoint_coverage_metaprofile.pdf",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_FIVE_PRIME_PLOT_PNG = results_path(
+    "branchpoints",
+    "downstream_exon",
+    "branchpoint_5prime_metaprofile.png",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_FIVE_PRIME_PLOT_PDF = results_path(
+    "branchpoints",
+    "downstream_exon",
+    "branchpoint_5prime_metaprofile.pdf",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_SUMMARY = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_percentile_overlap",
+    "percentile_summary.tsv",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INTRONS = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_percentile_overlap",
+    "intron_counts.tsv.gz",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_PLOT_PNG = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_percentile_overlap",
+    "ils_dis_anchored_percentile_overlap.png",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_PLOT_PDF = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_percentile_overlap",
+    "ils_dis_anchored_percentile_overlap.pdf",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_percentile_overlap",
+    "dis_ils_percentile_summary.tsv",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_INTRONS = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_percentile_overlap",
+    "dis_ils_intron_counts.tsv.gz",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_PLOT_PNG = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_percentile_overlap",
+    "dis_ils_anchored_percentile_overlap.png",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_PLOT_PDF = results_path(
+    "branchpoints",
+    "combined",
+    "anchored_percentile_overlap",
+    "dis_ils_anchored_percentile_overlap.pdf",
+)
 BRANCHPOINT_READTHROUGH_SAMPLE_METAPROFILE = results_path(
     "branchpoints",
     "readthrough_events",
@@ -300,6 +398,122 @@ BRANCHPOINT_RELATIVE_FEATURES_PLOT_PNG = results_path("branchpoints", "relative_
 BRANCHPOINT_RELATIVE_FEATURES_PLOT_PDF = results_path("branchpoints", "relative_branching_features", "relative_branching_features.pdf")
 BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PNG = results_path("branchpoints", "relative_branching_features", "feature_distributions.png")
 BRANCHPOINT_RELATIVE_FEATURES_DISTRIBUTION_PLOT_PDF = results_path("branchpoints", "relative_branching_features", "feature_distributions.pdf")
+BRANCHPOINT_RESIDUAL_LOGO_INTRONS = results_path("branchpoints", "residual_logos", "intron_groups.tsv.gz")
+BRANCHPOINT_RESIDUAL_LOGO_POSITION_STATS = results_path("branchpoints", "residual_logos", "position_stats.tsv")
+BRANCHPOINT_RESIDUAL_LOGO_PLOT_PNG = results_path("branchpoints", "residual_logos", "residual_branching_sequence_logos.png")
+BRANCHPOINT_RESIDUAL_LOGO_PLOT_PDF = results_path("branchpoints", "residual_logos", "residual_branching_sequence_logos.pdf")
+BRANCHPOINT_RESIDUAL_LOGO_FREQUENCY_PLOT_PNG = results_path(
+    "branchpoints",
+    "residual_logos",
+    "residual_branching_sequence_logos.frequency.png",
+)
+BRANCHPOINT_RESIDUAL_LOGO_FREQUENCY_PLOT_PDF = results_path(
+    "branchpoints",
+    "residual_logos",
+    "residual_branching_sequence_logos.frequency.pdf",
+)
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_SUMMARY = results_path("branchpoints", "query_branch_threshold_groups", "summary.tsv")
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_INTRONS = results_path("branchpoints", "query_branch_threshold_groups", "intron_groups.tsv.gz")
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_FEATURES = results_path(
+    "branchpoints",
+    "query_branch_threshold_groups",
+    "feature_group_comparison.tsv",
+)
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_POSITION_STATS = results_path(
+    "branchpoints",
+    "query_branch_threshold_groups",
+    "position_stats.tsv",
+)
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_DISTRIBUTION_PLOT_PNG = results_path(
+    "branchpoints",
+    "query_branch_threshold_groups",
+    "feature_distributions.png",
+)
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_DISTRIBUTION_PLOT_PDF = results_path(
+    "branchpoints",
+    "query_branch_threshold_groups",
+    "feature_distributions.pdf",
+)
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_LOGO_PLOT_PNG = results_path(
+    "branchpoints",
+    "query_branch_threshold_groups",
+    "sequence_logos.png",
+)
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_LOGO_PLOT_PDF = results_path(
+    "branchpoints",
+    "query_branch_threshold_groups",
+    "sequence_logos.pdf",
+)
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_FREQUENCY_PLOT_PNG = results_path(
+    "branchpoints",
+    "query_branch_threshold_groups",
+    "sequence_logos.frequency.png",
+)
+BRANCHPOINT_QUERY_THRESHOLD_GROUPS_FREQUENCY_PLOT_PDF = results_path(
+    "branchpoints",
+    "query_branch_threshold_groups",
+    "sequence_logos.frequency.pdf",
+)
+BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_SUMMARY = results_path(
+    "branchpoints",
+    "query_branch_threshold_abundance",
+    "summary.tsv",
+)
+BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_INTRONS = results_path(
+    "branchpoints",
+    "query_branch_threshold_abundance",
+    "intron_abundance.tsv.gz",
+)
+BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_GROUP_COMPARISON = results_path(
+    "branchpoints",
+    "query_branch_threshold_abundance",
+    "group_comparison.tsv",
+)
+BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_GENE_COMPARISON = results_path(
+    "branchpoints",
+    "query_branch_threshold_abundance",
+    "gene_matched_comparison.tsv",
+)
+BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_PLOT_PNG = results_path(
+    "branchpoints",
+    "query_branch_threshold_abundance",
+    "abundance_comparison.png",
+)
+BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_PLOT_PDF = results_path(
+    "branchpoints",
+    "query_branch_threshold_abundance",
+    "abundance_comparison.pdf",
+)
+BRANCHPOINT_CONTROL_ENRICHED_INTRONS_SUMMARY = results_path(
+    "branchpoints",
+    "control_enriched_introns",
+    "summary.tsv",
+)
+BRANCHPOINT_CONTROL_ENRICHED_INTRONS_RANKED = results_path(
+    "branchpoints",
+    "control_enriched_introns",
+    "ranked_introns.tsv.gz",
+)
+BRANCHPOINT_CONTROL_ENRICHED_INTRONS_FEATURES = results_path(
+    "branchpoints",
+    "control_enriched_introns",
+    "feature_group_comparison.tsv",
+)
+BRANCHPOINT_CONTROL_ENRICHED_INTRONS_GENES = results_path(
+    "branchpoints",
+    "control_enriched_introns",
+    "gene_summary.tsv",
+)
+BRANCHPOINT_CONTROL_ENRICHED_INTRONS_PLOT_PNG = results_path(
+    "branchpoints",
+    "control_enriched_introns",
+    "feature_distributions.png",
+)
+BRANCHPOINT_CONTROL_ENRICHED_INTRONS_PLOT_PDF = results_path(
+    "branchpoints",
+    "control_enriched_introns",
+    "feature_distributions.pdf",
+)
 PREMRNA_REFERENCE = results_path("premrna", "reference", "annotation.pkl")
 PREMRNA_SAMPLE_GENE_COUNTS = results_path("premrna", "samples", "{sample}.gene_counts.tsv.gz")
 PREMRNA_SAMPLE_COVERAGE = results_path("premrna", "samples", "{sample}.three_prime_exonic_coverage.tsv.gz")
@@ -459,12 +673,33 @@ def slurm_cluster_args(qos, mem, job_name, slurm_log_file, threads):
     return " ".join(parts)
 
 
+def branchpoint_shared_anchored_enrichment_args():
+    parts = []
+    control_condition = BRANCHPOINT_CFG.get("shared_anchored_enrichment_control_condition")
+    query_condition = BRANCHPOINT_CFG.get("shared_anchored_enrichment_query_condition")
+    denominator_scope = BRANCHPOINT_CFG.get("shared_anchored_enrichment_denominator_scope")
+    min_log2_fold_change = BRANCHPOINT_CFG.get("shared_anchored_enrichment_min_log2_fold_change")
+    max_log2_fold_change = BRANCHPOINT_CFG.get("shared_anchored_enrichment_max_log2_fold_change")
+    if control_condition:
+        parts.extend(["--anchored-enrichment-control-condition", shlex.quote(str(control_condition))])
+    if query_condition:
+        parts.extend(["--anchored-enrichment-query-condition", shlex.quote(str(query_condition))])
+    if denominator_scope:
+        parts.extend(["--anchored-enrichment-denominator-scope", shlex.quote(str(denominator_scope))])
+    if min_log2_fold_change is not None:
+        parts.extend(["--anchored-enrichment-min-log2-fold-change", shlex.quote(str(min_log2_fold_change))])
+    if max_log2_fold_change is not None:
+        parts.extend(["--anchored-enrichment-max-log2-fold-change", shlex.quote(str(max_log2_fold_change))])
+    return " ".join(parts)
+
+
 TRIM_R1_ADAPTER_ARGS = cutadapt_r1_adapter_args()
 TRIM_R2_ADAPTER = cutadapt_r2_adapter()
 TRIM_R2_POLY_G_ADAPTER = cutadapt_r2_poly_g_adapter()
 PREMAP_ARGS = bowtie2_preset(config["premap"])
 STAR_GENOME_GENERATE_EXTRA = star_genome_generate_extra()
 STAR_ALIGN_EXTRA = star_align_extra()
+BRANCHPOINT_SHARED_ANCHORED_ENRICHMENT_ARGS = branchpoint_shared_anchored_enrichment_args()
 INIT_SENTINEL = results_path(".workflow_dirs_initialized")
 WORKFLOW_DIRS = [
     results_path("reference", "rrna"),
@@ -487,12 +722,18 @@ WORKFLOW_DIRS = [
     results_path("branchpoints", "reference"),
     results_path("branchpoints", "samples"),
     results_path("branchpoints", "combined"),
+    results_path("branchpoints", "downstream_exon"),
+    results_path("branchpoints", "combined", "anchored_percentile_overlap"),
     results_path("branchpoints", "readthrough_events", "samples"),
     results_path("branchpoints", "readthrough_events", "combined"),
     results_path("branchpoints", "readthrough_events", "filtered"),
     results_path("branchpoints", "heterogeneity"),
     results_path("branchpoints", "sequence_context"),
     results_path("branchpoints", "relative_branching_features"),
+    results_path("branchpoints", "residual_logos"),
+    results_path("branchpoints", "query_branch_threshold_groups"),
+    results_path("branchpoints", "query_branch_threshold_abundance"),
+    results_path("branchpoints", "control_enriched_introns"),
     results_path("qc", "fastqc", "trimmed", "r1"),
     results_path("qc", "fastqc", "trimmed", "r2"),
     results_path("qc", "fastqc", "umi", "r1"),
@@ -529,9 +770,15 @@ WORKFLOW_DIRS = [
     log_path("branchpoints_reference"),
     log_path("branchpoints_quantify"),
     log_path("branchpoints_aggregate"),
+    log_path("branchpoints_downstream_exon"),
+    log_path("branchpoints_anchored_percentile_overlap"),
     log_path("branchpoints_readthrough_quantify"),
     log_path("branchpoints_readthrough_aggregate"),
     log_path("branchpoints_readthrough_filtered_aggregate"),
+    log_path("branchpoints_residual_logos"),
+    log_path("branchpoints_query_threshold_groups"),
+    log_path("branchpoints_query_threshold_abundance"),
+    log_path("branchpoints_control_enriched_introns"),
     log_path("slurm"),
     benchmark_path("reference"),
     benchmark_path("trim"),
@@ -553,9 +800,15 @@ WORKFLOW_DIRS = [
     benchmark_path("branchpoints_reference"),
     benchmark_path("branchpoints_quantify"),
     benchmark_path("branchpoints_aggregate"),
+    benchmark_path("branchpoints_downstream_exon"),
+    benchmark_path("branchpoints_anchored_percentile_overlap"),
     benchmark_path("branchpoints_readthrough_quantify"),
     benchmark_path("branchpoints_readthrough_aggregate"),
     benchmark_path("branchpoints_readthrough_filtered_aggregate"),
+    benchmark_path("branchpoints_residual_logos"),
+    benchmark_path("branchpoints_query_threshold_groups"),
+    benchmark_path("branchpoints_query_threshold_abundance"),
+    benchmark_path("branchpoints_control_enriched_introns"),
 ]
 
 
@@ -621,6 +874,24 @@ rule all:
         BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
         BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PNG,
         BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PDF,
+        BRANCHPOINT_COMBINED_ANCHORED_ENRICHMENT_HISTOGRAM_PNG,
+        BRANCHPOINT_COMBINED_ANCHORED_ENRICHMENT_HISTOGRAM_PDF,
+        BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_SAMPLE,
+        BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION,
+        BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_SAMPLE,
+        BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_CONDITION,
+        BRANCHPOINT_DOWNSTREAM_EXON_COVERAGE_PLOT_PNG,
+        BRANCHPOINT_DOWNSTREAM_EXON_COVERAGE_PLOT_PDF,
+        BRANCHPOINT_DOWNSTREAM_EXON_FIVE_PRIME_PLOT_PNG,
+        BRANCHPOINT_DOWNSTREAM_EXON_FIVE_PRIME_PLOT_PDF,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_SUMMARY,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INTRONS,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_PLOT_PNG,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_PLOT_PDF,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_INTRONS,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_PLOT_PNG,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_PLOT_PDF,
         expand(BRANCHPOINT_READTHROUGH_SAMPLE_METAPROFILE, sample=SAMPLES),
         expand(BRANCHPOINT_READTHROUGH_SAMPLE_SUMMARY, sample=SAMPLES),
         expand(BRANCHPOINT_READTHROUGH_SAMPLE_SITE_COUNTS, sample=SAMPLES),
@@ -1631,7 +1902,9 @@ rule quantify_branchpoint_ends:
     params:
         script=str((SCRIPTS_DIR / "quantify_branchpoint_ends.py").resolve()),
         condition=lambda wildcards: sample_condition(wildcards.sample),
-        anchor_window=BRANCHPOINT_CFG["anchor_window"],
+        anchor_window=BRANCHPOINT_CFG.get("anchor_window", 5),
+        anchor_upstream=BRANCHPOINT_CFG.get("anchor_upstream", BRANCHPOINT_CFG.get("anchor_window", 5)),
+        anchor_downstream=BRANCHPOINT_CFG.get("anchor_downstream", BRANCHPOINT_CFG.get("anchor_window", 5)),
         profile_upstream=BRANCHPOINT_CFG["profile_upstream"],
         profile_downstream=BRANCHPOINT_CFG["profile_downstream"],
         three_prime_coverage_upstream=BRANCHPOINT_CFG.get(
@@ -1660,6 +1933,8 @@ rule quantify_branchpoint_ends:
           --sample {wildcards.sample} \
           --condition {params.condition} \
           --anchor-window {params.anchor_window} \
+          --anchor-upstream {params.anchor_upstream} \
+          --anchor-downstream {params.anchor_downstream} \
           --profile-upstream {params.profile_upstream} \
           --profile-downstream {params.profile_downstream} \
           --three-prime-coverage-upstream {params.three_prime_coverage_upstream} \
@@ -1700,7 +1975,9 @@ rule aggregate_branchpoint_profiles:
         three_prime_coverage_by_sample=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
         three_prime_coverage_by_condition=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
         three_prime_coverage_plot_png=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PNG,
-        three_prime_coverage_plot_pdf=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PDF
+        three_prime_coverage_plot_pdf=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_PLOT_PDF,
+        anchored_enrichment_histogram_png=BRANCHPOINT_COMBINED_ANCHORED_ENRICHMENT_HISTOGRAM_PNG,
+        anchored_enrichment_histogram_pdf=BRANCHPOINT_COMBINED_ANCHORED_ENRICHMENT_HISTOGRAM_PDF
     log:
         log_path("branchpoints_aggregate", "combined.log")
     benchmark:
@@ -1730,6 +2007,7 @@ rule aggregate_branchpoint_profiles:
         plot_upstream=BRANCHPOINT_CFG.get("plot_upstream", 50),
         plot_downstream=BRANCHPOINT_CFG.get("plot_downstream", 10),
         shared_min_reads=BRANCHPOINT_CFG["shared_min_reads_all_samples"],
+        anchored_enrichment_args=BRANCHPOINT_SHARED_ANCHORED_ENRICHMENT_ARGS,
         benchmark_dir=str(Path(benchmark_path("branchpoints_aggregate", "combined.tsv")).parent),
         cluster=slurm_cluster_args(
             "c_short",
@@ -1753,6 +2031,7 @@ rule aggregate_branchpoint_profiles:
           --plot-upstream {params.plot_upstream} \
           --plot-downstream {params.plot_downstream} \
           --shared-min-reads {params.shared_min_reads} \
+          {params.anchored_enrichment_args} \
           --output-metaprofile-by-sample {output.metaprofile_by_sample} \
           --output-metaprofile-by-condition {output.metaprofile_by_condition} \
           --output-summary-by-sample {output.summary_by_sample} \
@@ -1772,6 +2051,178 @@ rule aggregate_branchpoint_profiles:
           --output-three-prime-coverage-by-condition {output.three_prime_coverage_by_condition} \
           --output-three-prime-coverage-plot-png {output.three_prime_coverage_plot_png} \
           --output-three-prime-coverage-plot-pdf {output.three_prime_coverage_plot_pdf} \
+          --output-anchored-enrichment-histogram-png {output.anchored_enrichment_histogram_png} \
+          --output-anchored-enrichment-histogram-pdf {output.anchored_enrichment_histogram_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_branchpoint_anchored_percentile_overlap:
+    input:
+        init=INIT_SENTINEL,
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES)
+    output:
+        summary=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_SUMMARY,
+        intron_counts=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INTRONS,
+        plot_png=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_PLOT_PDF
+    log:
+        log_path("branchpoints_anchored_percentile_overlap", "ils_dis.log")
+    benchmark:
+        benchmark_path("branchpoints_anchored_percentile_overlap", "ils_dis.tsv")
+    threads: config["resources"]["branchpoint_aggregate_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_anchored_percentile_overlap.py").resolve()),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        reference_condition=BRANCHPOINT_CFG.get("anchored_percentile_overlap_reference_condition", "ILS"),
+        query_condition=BRANCHPOINT_CFG.get("anchored_percentile_overlap_query_condition", "DIS"),
+        percentile_start=BRANCHPOINT_CFG.get("anchored_percentile_overlap_start", 1),
+        percentile_end=BRANCHPOINT_CFG.get("anchored_percentile_overlap_end", 99),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_anchored_percentile_overlap", "ils_dis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "bp_pct_overlap",
+            log_path("slurm", "bp_pct_overlap.%A.log"),
+            config["resources"]["branchpoint_aggregate_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.site_count_args} \
+          --reference-condition {params.reference_condition:q} \
+          --query-condition {params.query_condition:q} \
+          --percentile-start {params.percentile_start} \
+          --percentile-end {params.percentile_end} \
+          --output-summary {output.summary} \
+          --output-intron-counts {output.intron_counts} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_downstream_exon_branchpoint_profiles:
+    input:
+        init=INIT_SENTINEL,
+        reference=BRANCHPOINT_REFERENCE,
+        bams=expand(results_path("dedup", "{sample}.dedup.bam"), sample=SAMPLES),
+        bais=expand(results_path("dedup", "{sample}.dedup.bam.bai"), sample=SAMPLES)
+    output:
+        metaprofile_by_sample=BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_SAMPLE,
+        metaprofile_by_condition=BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION,
+        summary_by_sample=BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_SAMPLE,
+        summary_by_condition=BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_CONDITION,
+        coverage_plot_png=BRANCHPOINT_DOWNSTREAM_EXON_COVERAGE_PLOT_PNG,
+        coverage_plot_pdf=BRANCHPOINT_DOWNSTREAM_EXON_COVERAGE_PLOT_PDF,
+        five_prime_plot_png=BRANCHPOINT_DOWNSTREAM_EXON_FIVE_PRIME_PLOT_PNG,
+        five_prime_plot_pdf=BRANCHPOINT_DOWNSTREAM_EXON_FIVE_PRIME_PLOT_PDF
+    log:
+        log_path("branchpoints_downstream_exon", "analysis.log")
+    benchmark:
+        benchmark_path("branchpoints_downstream_exon", "analysis.tsv")
+    threads: config["resources"].get("branchpoint_aggregate_threads", 1)
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_downstream_exon_branchpoint_profiles.py").resolve()),
+        sample_bam_args=lambda wildcards: " ".join(
+            "--sample-bam "
+            f"{shlex.quote(sample)} "
+            f"{shlex.quote(sample_condition(sample))} "
+            f"{shlex.quote(results_path('dedup', f'{sample}.dedup.bam'))}"
+            for sample in SAMPLES
+        ),
+        downstream_exon_min_offset=BRANCHPOINT_CFG.get("downstream_exon_min_offset", 5),
+        profile_upstream=BRANCHPOINT_CFG["profile_upstream"],
+        profile_downstream=BRANCHPOINT_CFG["profile_downstream"],
+        plot_upstream=BRANCHPOINT_CFG.get("plot_upstream", 50),
+        plot_downstream=BRANCHPOINT_CFG.get("plot_downstream", 10),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_downstream_exon", "analysis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_medium",
+            "16G",
+            "bp_exon_prof",
+            log_path("slurm", "bp_exon_prof.%A.log"),
+            config["resources"].get("branchpoint_aggregate_threads", 1),
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.metaprofile_by_sample})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --reference {input.reference} \
+          {params.sample_bam_args} \
+          --downstream-exon-min-offset {params.downstream_exon_min_offset} \
+          --profile-upstream {params.profile_upstream} \
+          --profile-downstream {params.profile_downstream} \
+          --plot-upstream {params.plot_upstream} \
+          --plot-downstream {params.plot_downstream} \
+          --output-metaprofile-by-sample {output.metaprofile_by_sample} \
+          --output-metaprofile-by-condition {output.metaprofile_by_condition} \
+          --output-summary-by-sample {output.summary_by_sample} \
+          --output-summary-by-condition {output.summary_by_condition} \
+          --output-coverage-plot-png {output.coverage_plot_png} \
+          --output-coverage-plot-pdf {output.coverage_plot_pdf} \
+          --output-five-prime-plot-png {output.five_prime_plot_png} \
+          --output-five-prime-plot-pdf {output.five_prime_plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_branchpoint_anchored_percentile_overlap_inverse:
+    input:
+        init=INIT_SENTINEL,
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES)
+    output:
+        summary=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY,
+        intron_counts=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_INTRONS,
+        plot_png=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_PLOT_PDF
+    log:
+        log_path("branchpoints_anchored_percentile_overlap", "dis_ils.log")
+    benchmark:
+        benchmark_path("branchpoints_anchored_percentile_overlap", "dis_ils.tsv")
+    threads: config["resources"]["branchpoint_aggregate_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_anchored_percentile_overlap.py").resolve()),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        reference_condition=BRANCHPOINT_CFG.get("anchored_percentile_overlap_query_condition", "DIS"),
+        query_condition=BRANCHPOINT_CFG.get("anchored_percentile_overlap_reference_condition", "ILS"),
+        percentile_start=BRANCHPOINT_CFG.get("anchored_percentile_overlap_start", 1),
+        percentile_end=BRANCHPOINT_CFG.get("anchored_percentile_overlap_end", 99),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_anchored_percentile_overlap", "dis_ils.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "bp_pct_overlap_inv",
+            log_path("slurm", "bp_pct_overlap_inv.%A.log"),
+            config["resources"]["branchpoint_aggregate_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.site_count_args} \
+          --reference-condition {params.reference_condition:q} \
+          --query-condition {params.query_condition:q} \
+          --percentile-start {params.percentile_start} \
+          --percentile-end {params.percentile_end} \
+          --output-summary {output.summary} \
+          --output-intron-counts {output.intron_counts} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
           > {log} 2>&1
         """
 
@@ -1797,7 +2248,9 @@ rule quantify_branchpoint_readthrough_events:
     params:
         script=str((SCRIPTS_DIR / "quantify_branchpoint_readthrough_events.py").resolve()),
         condition=lambda wildcards: sample_condition(wildcards.sample),
-        anchor_window=BRANCHPOINT_CFG["anchor_window"],
+        anchor_window=BRANCHPOINT_CFG.get("anchor_window", 5),
+        anchor_upstream=BRANCHPOINT_CFG.get("anchor_upstream", BRANCHPOINT_CFG.get("anchor_window", 5)),
+        anchor_downstream=BRANCHPOINT_CFG.get("anchor_downstream", BRANCHPOINT_CFG.get("anchor_window", 5)),
         profile_upstream=BRANCHPOINT_CFG.get("readthrough_profile_upstream", BRANCHPOINT_CFG["profile_upstream"]),
         profile_downstream=BRANCHPOINT_CFG.get(
             "readthrough_profile_downstream",
@@ -1823,6 +2276,8 @@ rule quantify_branchpoint_readthrough_events:
           --sample {wildcards.sample} \
           --condition {params.condition} \
           --anchor-window {params.anchor_window} \
+          --anchor-upstream {params.anchor_upstream} \
+          --anchor-downstream {params.anchor_downstream} \
           --profile-upstream {params.profile_upstream} \
           --profile-downstream {params.profile_downstream} \
           --output-site-counts {output.site_counts} \
@@ -2224,6 +2679,257 @@ rule analyze_relative_branching_features:
           --output-group-comparison {output.group_comparison} \
           --output-plot-png {output.plot_png} \
           --output-plot-pdf {output.plot_pdf} \
+          --output-feature-distribution-plot-png {output.feature_distribution_plot_png} \
+          --output-feature-distribution-plot-pdf {output.feature_distribution_plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule plot_residual_branching_logos:
+    input:
+        init=INIT_SENTINEL,
+        shared_introns=BRANCHPOINT_RELATIVE_FEATURES_SHARED_INTRONS
+    output:
+        introns=BRANCHPOINT_RESIDUAL_LOGO_INTRONS,
+        position_stats=BRANCHPOINT_RESIDUAL_LOGO_POSITION_STATS,
+        plot_png=BRANCHPOINT_RESIDUAL_LOGO_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_RESIDUAL_LOGO_PLOT_PDF,
+        frequency_plot_png=BRANCHPOINT_RESIDUAL_LOGO_FREQUENCY_PLOT_PNG,
+        frequency_plot_pdf=BRANCHPOINT_RESIDUAL_LOGO_FREQUENCY_PLOT_PDF
+    log:
+        log_path("branchpoints_residual_logos", "plot.log")
+    benchmark:
+        benchmark_path("branchpoints_residual_logos", "plot.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "plot_residual_branching_logos.py").resolve()),
+        genome_fasta=BRANCHPOINT_RELATIVE_FEATURE_GENOME_FASTA,
+        control_condition=BRANCHPOINT_CFG.get("relative_feature_control_condition", "ILS"),
+        query_condition=BRANCHPOINT_CFG.get("relative_feature_query_condition", "DIS"),
+        residual_quantile_fraction=BRANCHPOINT_CFG.get("relative_feature_residual_quantile_fraction", 0.1),
+        bp_upstream=BRANCHPOINT_CFG.get("relative_feature_logo_bp_upstream", 10),
+        bp_downstream=BRANCHPOINT_CFG.get("relative_feature_logo_bp_downstream", 10),
+        five_prime_upstream=BRANCHPOINT_CFG.get("relative_feature_logo_five_prime_upstream", 5),
+        five_prime_downstream=BRANCHPOINT_CFG.get("relative_feature_logo_five_prime_downstream", 10),
+        three_prime_upstream=BRANCHPOINT_CFG.get("relative_feature_logo_three_prime_upstream", 20),
+        three_prime_downstream=BRANCHPOINT_CFG.get("relative_feature_logo_three_prime_downstream", 3),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_residual_logos", "plot.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bp_reslogo",
+            log_path("slurm", "bp_reslogo.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.introns})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --shared-introns {input.shared_introns} \
+          --genome-fasta {params.genome_fasta} \
+          --control-condition {params.control_condition} \
+          --query-condition {params.query_condition} \
+          --residual-quantile-fraction {params.residual_quantile_fraction} \
+          --bp-upstream {params.bp_upstream} \
+          --bp-downstream {params.bp_downstream} \
+          --five-prime-upstream {params.five_prime_upstream} \
+          --five-prime-downstream {params.five_prime_downstream} \
+          --three-prime-upstream {params.three_prime_upstream} \
+          --three-prime-downstream {params.three_prime_downstream} \
+          --output-intron-groups {output.introns} \
+          --output-position-stats {output.position_stats} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
+          --output-frequency-plot-png {output.frequency_plot_png} \
+          --output-frequency-plot-pdf {output.frequency_plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_query_branch_threshold_groups:
+    input:
+        init=INIT_SENTINEL,
+        shared_introns=BRANCHPOINT_RELATIVE_FEATURES_SHARED_INTRONS
+    output:
+        summary=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_SUMMARY,
+        intron_groups=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_INTRONS,
+        feature_group_comparison=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_FEATURES,
+        position_stats=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_POSITION_STATS,
+        feature_distribution_plot_png=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_DISTRIBUTION_PLOT_PNG,
+        feature_distribution_plot_pdf=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_DISTRIBUTION_PLOT_PDF,
+        sequence_logo_plot_png=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_LOGO_PLOT_PNG,
+        sequence_logo_plot_pdf=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_LOGO_PLOT_PDF,
+        sequence_frequency_plot_png=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_FREQUENCY_PLOT_PNG,
+        sequence_frequency_plot_pdf=BRANCHPOINT_QUERY_THRESHOLD_GROUPS_FREQUENCY_PLOT_PDF
+    log:
+        log_path("branchpoints_query_threshold_groups", "analysis.log")
+    benchmark:
+        benchmark_path("branchpoints_query_threshold_groups", "analysis.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_query_branch_threshold_groups.py").resolve()),
+        genome_fasta=BRANCHPOINT_RELATIVE_FEATURE_GENOME_FASTA,
+        control_condition=BRANCHPOINT_CFG.get("relative_feature_control_condition", "ILS"),
+        query_condition=BRANCHPOINT_CFG.get("relative_feature_query_condition", "DIS"),
+        query_branch_threshold=BRANCHPOINT_CFG.get("query_branch_group_threshold", 0.25),
+        reference_residual_quantile_fraction=BRANCHPOINT_CFG.get(
+            "query_branch_group_reference_residual_quantile_fraction",
+            BRANCHPOINT_CFG.get("relative_feature_residual_quantile_fraction", 0.1),
+        ),
+        bp_upstream=BRANCHPOINT_CFG.get("relative_feature_logo_bp_upstream", 10),
+        bp_downstream=BRANCHPOINT_CFG.get("relative_feature_logo_bp_downstream", 10),
+        five_prime_upstream=BRANCHPOINT_CFG.get("relative_feature_logo_five_prime_upstream", 5),
+        five_prime_downstream=BRANCHPOINT_CFG.get("relative_feature_logo_five_prime_downstream", 10),
+        three_prime_upstream=BRANCHPOINT_CFG.get("relative_feature_logo_three_prime_upstream", 20),
+        three_prime_downstream=BRANCHPOINT_CFG.get("relative_feature_logo_three_prime_downstream", 3),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_query_threshold_groups", "analysis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bp_qthr",
+            log_path("slurm", "bp_qthr.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --shared-introns {input.shared_introns} \
+          --genome-fasta {params.genome_fasta} \
+          --control-condition {params.control_condition} \
+          --query-condition {params.query_condition} \
+          --query-branch-threshold {params.query_branch_threshold} \
+          --reference-residual-quantile-fraction {params.reference_residual_quantile_fraction} \
+          --bp-upstream {params.bp_upstream} \
+          --bp-downstream {params.bp_downstream} \
+          --five-prime-upstream {params.five_prime_upstream} \
+          --five-prime-downstream {params.five_prime_downstream} \
+          --three-prime-upstream {params.three_prime_upstream} \
+          --three-prime-downstream {params.three_prime_downstream} \
+          --output-summary {output.summary} \
+          --output-intron-groups {output.intron_groups} \
+          --output-feature-group-comparison {output.feature_group_comparison} \
+          --output-position-stats {output.position_stats} \
+          --output-feature-distribution-plot-png {output.feature_distribution_plot_png} \
+          --output-feature-distribution-plot-pdf {output.feature_distribution_plot_pdf} \
+          --output-sequence-logo-plot-png {output.sequence_logo_plot_png} \
+          --output-sequence-logo-plot-pdf {output.sequence_logo_plot_pdf} \
+          --output-sequence-frequency-plot-png {output.sequence_frequency_plot_png} \
+          --output-sequence-frequency-plot-pdf {output.sequence_frequency_plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_query_branch_threshold_abundance:
+    input:
+        init=INIT_SENTINEL,
+        shared_introns=BRANCHPOINT_RELATIVE_FEATURES_SHARED_INTRONS,
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES)
+    output:
+        summary=BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_SUMMARY,
+        intron_abundance=BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_INTRONS,
+        group_comparison=BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_GROUP_COMPARISON,
+        gene_matched_comparison=BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_GENE_COMPARISON,
+        plot_png=BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_PLOT_PNG,
+        plot_pdf=BRANCHPOINT_QUERY_THRESHOLD_ABUNDANCE_PLOT_PDF
+    log:
+        log_path("branchpoints_query_threshold_abundance", "analysis.log")
+    benchmark:
+        benchmark_path("branchpoints_query_threshold_abundance", "analysis.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_query_branch_threshold_abundance.py").resolve()),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        control_condition=BRANCHPOINT_CFG.get("relative_feature_control_condition", "ILS"),
+        query_condition=BRANCHPOINT_CFG.get("relative_feature_query_condition", "DIS"),
+        query_branch_threshold=BRANCHPOINT_CFG.get("query_branch_group_threshold", 0.25),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_query_threshold_abundance", "analysis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bp_qabnd",
+            log_path("slurm", "bp_qabnd.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --shared-introns {input.shared_introns} \
+          {params.site_count_args} \
+          --control-condition {params.control_condition} \
+          --query-condition {params.query_condition} \
+          --query-branch-threshold {params.query_branch_threshold} \
+          --output-summary {output.summary} \
+          --output-intron-abundance {output.intron_abundance} \
+          --output-group-comparison {output.group_comparison} \
+          --output-gene-matched-comparison {output.gene_matched_comparison} \
+          --output-plot-png {output.plot_png} \
+          --output-plot-pdf {output.plot_pdf} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_control_enriched_introns:
+    input:
+        init=INIT_SENTINEL,
+        shared_introns=BRANCHPOINT_RELATIVE_FEATURES_SHARED_INTRONS,
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES)
+    output:
+        summary=BRANCHPOINT_CONTROL_ENRICHED_INTRONS_SUMMARY,
+        ranked_introns=BRANCHPOINT_CONTROL_ENRICHED_INTRONS_RANKED,
+        feature_group_comparison=BRANCHPOINT_CONTROL_ENRICHED_INTRONS_FEATURES,
+        gene_summary=BRANCHPOINT_CONTROL_ENRICHED_INTRONS_GENES,
+        feature_distribution_plot_png=BRANCHPOINT_CONTROL_ENRICHED_INTRONS_PLOT_PNG,
+        feature_distribution_plot_pdf=BRANCHPOINT_CONTROL_ENRICHED_INTRONS_PLOT_PDF
+    log:
+        log_path("branchpoints_control_enriched_introns", "analysis.log")
+    benchmark:
+        benchmark_path("branchpoints_control_enriched_introns", "analysis.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_control_enriched_introns.py").resolve()),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        control_condition=BRANCHPOINT_CFG.get("relative_feature_control_condition", "ILS"),
+        query_condition=BRANCHPOINT_CFG.get("relative_feature_query_condition", "DIS"),
+        control_enriched_quantile_fraction=BRANCHPOINT_CFG.get("control_enriched_quantile_fraction", 0.1),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_control_enriched_introns", "analysis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bp_ctrlenr",
+            log_path("slurm", "bp_ctrlenr.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --shared-introns {input.shared_introns} \
+          {params.site_count_args} \
+          --control-condition {params.control_condition} \
+          --query-condition {params.query_condition} \
+          --control-enriched-quantile-fraction {params.control_enriched_quantile_fraction} \
+          --output-summary {output.summary} \
+          --output-ranked-introns {output.ranked_introns} \
+          --output-feature-group-comparison {output.feature_group_comparison} \
+          --output-gene-summary {output.gene_summary} \
           --output-feature-distribution-plot-png {output.feature_distribution_plot_png} \
           --output-feature-distribution-plot-pdf {output.feature_distribution_plot_pdf} \
           > {log} 2>&1

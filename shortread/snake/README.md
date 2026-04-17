@@ -130,27 +130,39 @@ It:
 2. assigns branchpoints from `annotation/colaseq_branchpoints_scores.txt`
 3. selects the highest-scoring branchpoint per intron
 4. keeps uniquely mapped, primary, non-supplementary, proper-pair fragments
-5. anchors fragments whose RNA 3' end falls within `+/- 5 nt` of the intron 3' splice site
+5. anchors fragments whose RNA 3' end falls from `5 nt` upstream to `1 nt` downstream of the intron 3' splice site
 6. profiles the `read1` 5' end around the selected branchpoint
 7. restricts the combined comparison to introns with at least `5` anchored fragments in every sample
-8. reports the primary signal as the fraction of anchored intron-end fragments, with CPM retained as secondary context
+8. can optionally further restrict the shared intron set by pooled anchored-abundance enrichment between conditions
+9. reports the primary signal as the fraction of anchored intron-end fragments, with CPM retained as secondary context
 
 Positive offsets in the metaprofile point towards the intron 3' splice site.
 The per-sample summary tables report branchpoint-proximal counts at offset `0`, offset `+1`, and combined `0/+1`, both as fractions of anchored fragments and as CPM.
 The threshold for the shared intron set is configurable via `branchpoint_analysis.shared_min_reads_all_samples` in `shortread/snake/config.yaml`.
+Setting `branchpoint_analysis.shared_min_reads_all_samples` to `0` disables the all-sample shared-read filter, so any intron with at least one anchored fragment in any sample can contribute to the metaprofile.
+An optional additional filter can be applied with `branchpoint_analysis.shared_anchored_enrichment_*`, using `log2((query anchored share) / (control anchored share))` computed from pooled anchored fragments across each condition. The denominator can be all introns or the pre-filter shared intron set, controlled by `branchpoint_analysis.shared_anchored_enrichment_denominator_scope`. The default is to report this score without filtering unless a minimum or maximum log2 fold-change cutoff is set. The retained `shared_introns.tsv` includes the pooled control/query anchored counts and the corresponding `anchored_enrichment_log2_fold_change`.
 The combined outputs include the original 5' end metaprofile, a coverage-style metaprofile that assumes anchored 3' ends align to the 3' splice site, canonical-versus-remaining branchpoint coverage replots, and a separate 3' splice site-centred coverage metaprofile.
-Anchored fragments are required to have a fragment 3' end near the intron 3' splice site and a `read1` 5' end that still falls inside the selected intron. The stored intron-offset tables retain all such intronic 5' ends, even when they fall outside the plotted metaprofile window, so upstream starts contribute correctly to the coverage metaprofile.
+Anchored fragments are required to have a fragment 3' end near the intron 3' splice site and a `read1` 5' end that still falls inside the selected intron. The default anchor window is strand-aware and asymmetric, keeping fragment 3' ends from `-5..+1 nt` relative to the 3' splice site, where positive offsets point downstream into the exon. The stored intron-offset tables retain all such intronic 5' ends, even when they fall outside the plotted metaprofile window, so upstream starts contribute correctly to the coverage metaprofile.
 The additional branchpoint coverage replots classify the selected branchpoint of each shared intron by strand-aware RNA motif, using `branchpoint_analysis.canonical_branchpoint_motif` in `shortread/snake/config.yaml`. With the current default `YUNAY`, the unique `A` in the motif is treated as the branchpoint base, so canonical introns match positions `-3..+1` relative to the branchpoint and all other shared introns fall into the remaining category. These plots are additive and do not replace the original all-introns coverage metaprofile.
 
 All branchpoint-centred 5' end and coverage metaprofile plots currently display the window set by `branchpoint_analysis.plot_upstream` and `branchpoint_analysis.plot_downstream` in `shortread/snake/config.yaml` (currently `-50..+10`), without changing the wider stored quantification windows used upstream of plotting.
 The 3' splice site-centred coverage output uses a broader fragment set: all unique, proper-pair fragments whose `read1` 5' end lies inside a selected intron and whose fragment span crosses that intron's 3' splice site. This includes fragments whose 3' ends extend downstream of the splice site. The default window is `-100` to `+100 nt`, configurable via `branchpoint_analysis.three_prime_coverage_upstream` and `branchpoint_analysis.three_prime_coverage_downstream`.
 Combined metaprofile plots show each condition as a thick mean trace with a shaded 95% confidence interval derived from replicate-to-replicate variability.
 
+There is also a downstream-exon-spanning branchpoint metaprofile. It keeps unique proper-pair fragments whose `read1` 5' end starts inside a selected intron, whose fragment span crosses the intron 3' splice site, and whose RNA 3' end maps at least `branchpoint_analysis.downstream_exon_min_offset` nt downstream into the exon (default `+5 nt`). It reports both branchpoint-centred coverage and the corresponding `read1` 5' end metaprofile.
+
+There is also an anchored-intron overlap analysis for comparing ILS and DIS detection at matched ILS abundance cutoffs. It pools anchored counts across ILS replicates, thresholds ILS-positive introns at percentile cutoffs from 1 to 99, and reports the percentage of those introns with at least one anchored fragment in any DIS replicate.
+The inverse DIS-reference comparison is also reported, using the same percentile logic but asking what percentage of DIS-positive introns have at least one anchored fragment in any ILS replicate.
+
 There is also an intron-level heterogeneity analysis that tests whether branchpoint-proximal reads are more unevenly distributed between introns than expected under a single shared branching probability. It reports this separately for each sample and pooled condition, and compares the configured query condition against the configured control condition using shared introns ranked by control branching.
 
 The workflow also includes a sequence-context analysis for branchpoint-associated RT arrest. It extracts branchpoint-flanking sequence and the first intronic bases after the 5' splice site, then uses the configured control condition to estimate sequence-dependent RT readthrough versus arrest.
 
 There is also a relative branching feature analysis that uses the configured control condition as a baseline predictor of per-intron branchiness, then asks which intron features and branchpoint-flanking sequence contexts explain branch enrichment or depletion in the configured query condition.
+
+There is also a residual-branching sequence-logo analysis that reuses the same shared introns and residual ranking from the relative branching feature analysis, defines the residual-high set as the configured top residual quantile, and compares that set against all other shared introns using sequence logos for the branchpoint flank, the 5' splice site window, and the 3' splice site window. It writes both information-content logos and raw base-frequency logos.
+
+There is also a query-branch-threshold grouping analysis that reuses the same shared introns but defines the high-branch set by an absolute pooled query-condition branch fraction threshold, then compares that set against the remaining shared introns with feature-distribution summaries and BP/5'SS/3'SS sequence logos. It also writes both information-content logos and raw base-frequency logos.
 
 There is also a branchpoint readthrough-event analysis for reads that extend through the selected branchpoint. It keeps the same anchored fragment assignment, restricts to `read1` alignments whose aligned path covers the branchpoint and whose `read1` 5' end lies upstream of it, then uses the `read1` `MD` tag plus CIGAR to profile mismatches, deletions, and insertions separately relative to the branchpoint. The combined comparison is restricted to introns with at least `branchpoint_analysis.readthrough_shared_min_reads_all_samples` traversing reads in every sample, and the metaprofiles report event frequency as a fraction of traversing-read coverage at each offset. The readthrough plots can be cropped independently of the underlying quantification with `branchpoint_analysis.readthrough_plot_upstream` and `branchpoint_analysis.readthrough_plot_downstream`.
 These readthrough metaprofile plots use the same visualization convention: a thick mean trace with a shaded 95% confidence interval for each condition.
@@ -188,6 +200,18 @@ Main outputs:
 - `shortread/snake/results/branchpoints/combined/branchpoint_coverage_metaprofile.canonical.png`
 - `shortread/snake/results/branchpoints/combined/branchpoint_coverage_metaprofile.remaining.png`
 - `shortread/snake/results/branchpoints/combined/three_prime_ss_coverage_metaprofile.png`
+- `shortread/snake/results/branchpoints/downstream_exon/metaprofile.by_sample.tsv`
+- `shortread/snake/results/branchpoints/downstream_exon/metaprofile.by_condition.tsv`
+- `shortread/snake/results/branchpoints/downstream_exon/summary.by_sample.tsv`
+- `shortread/snake/results/branchpoints/downstream_exon/summary.by_condition.tsv`
+- `shortread/snake/results/branchpoints/downstream_exon/branchpoint_coverage_metaprofile.png`
+- `shortread/snake/results/branchpoints/downstream_exon/branchpoint_5prime_metaprofile.png`
+- `shortread/snake/results/branchpoints/combined/anchored_percentile_overlap/percentile_summary.tsv`
+- `shortread/snake/results/branchpoints/combined/anchored_percentile_overlap/intron_counts.tsv.gz`
+- `shortread/snake/results/branchpoints/combined/anchored_percentile_overlap/ils_dis_anchored_percentile_overlap.png`
+- `shortread/snake/results/branchpoints/combined/anchored_percentile_overlap/dis_ils_percentile_summary.tsv`
+- `shortread/snake/results/branchpoints/combined/anchored_percentile_overlap/dis_ils_intron_counts.tsv.gz`
+- `shortread/snake/results/branchpoints/combined/anchored_percentile_overlap/dis_ils_anchored_percentile_overlap.png`
 - `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.summary.tsv`
 - `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.metaprofile.tsv`
 - `shortread/snake/results/branchpoints/readthrough_events/samples/{sample}.site_counts.tsv.gz`
@@ -221,3 +245,22 @@ Main outputs:
 - `shortread/snake/results/branchpoints/relative_branching_features/relative_branching_features.png`
 - `shortread/snake/results/branchpoints/relative_branching_features/feature_group_comparison.tsv`
 - `shortread/snake/results/branchpoints/relative_branching_features/feature_distributions.png`
+- `shortread/snake/results/branchpoints/residual_logos/intron_groups.tsv.gz`
+- `shortread/snake/results/branchpoints/residual_logos/position_stats.tsv`
+- `shortread/snake/results/branchpoints/residual_logos/residual_branching_sequence_logos.png`
+- `shortread/snake/results/branchpoints/residual_logos/residual_branching_sequence_logos.frequency.png`
+- `shortread/snake/results/branchpoints/query_branch_threshold_groups/summary.tsv`
+- `shortread/snake/results/branchpoints/query_branch_threshold_groups/intron_groups.tsv.gz`
+- `shortread/snake/results/branchpoints/query_branch_threshold_groups/feature_group_comparison.tsv`
+- `shortread/snake/results/branchpoints/query_branch_threshold_groups/sequence_logos.png`
+- `shortread/snake/results/branchpoints/query_branch_threshold_groups/sequence_logos.frequency.png`
+- `shortread/snake/results/branchpoints/query_branch_threshold_abundance/summary.tsv`
+- `shortread/snake/results/branchpoints/query_branch_threshold_abundance/intron_abundance.tsv.gz`
+- `shortread/snake/results/branchpoints/query_branch_threshold_abundance/group_comparison.tsv`
+- `shortread/snake/results/branchpoints/query_branch_threshold_abundance/gene_matched_comparison.tsv`
+- `shortread/snake/results/branchpoints/query_branch_threshold_abundance/abundance_comparison.png`
+- `shortread/snake/results/branchpoints/control_enriched_introns/summary.tsv`
+- `shortread/snake/results/branchpoints/control_enriched_introns/ranked_introns.tsv.gz`
+- `shortread/snake/results/branchpoints/control_enriched_introns/feature_group_comparison.tsv`
+- `shortread/snake/results/branchpoints/control_enriched_introns/gene_summary.tsv`
+- `shortread/snake/results/branchpoints/control_enriched_introns/feature_distributions.png`

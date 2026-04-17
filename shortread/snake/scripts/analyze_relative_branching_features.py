@@ -36,6 +36,7 @@ FEATURE_LABELS = {
     "branchpoint_score": "BP score",
     "donor_maxent": "5'SS MaxEnt",
     "acceptor_maxent": "3'SS MaxEnt",
+    "anchored_enrichment_log2_fold_change": "Anchored abundance log2(DIS/ILS)",
     "intron_gc": "Intron GC",
     "intron_gc_5p_window": "5' intron GC (100 nt)",
     "intron_gc_3p_window": "3' intron GC (100 nt)",
@@ -339,6 +340,10 @@ def build_shared_rows(
 ):
     control_records = condition_records[control_condition]
     query_records = condition_records[query_condition]
+    total_control_anchored = sum(record["anchored_fragments"] for record in control_records.values())
+    total_query_anchored = sum(record["anchored_fragments"] for record in query_records.values())
+    if total_control_anchored <= 0 or total_query_anchored <= 0:
+        raise ValueError("Condition-level anchored fragment totals must be positive")
     shared_introns = sorted(set(control_records) & set(query_records))
     rows = []
 
@@ -393,6 +398,8 @@ def build_shared_rows(
             query_fraction = 0.0 if query["anchored_fragments"] == 0 else query["signal_fragments"] / query["anchored_fragments"]
             control_smoothed = empirical_probability(control["signal_fragments"], control["anchored_fragments"])
             query_smoothed = empirical_probability(query["signal_fragments"], query["anchored_fragments"])
+            control_global_anchored_fraction = control["anchored_fragments"] / total_control_anchored
+            query_global_anchored_fraction = query["anchored_fragments"] / total_query_anchored
 
             row = {
                 "intron_id": intron_id,
@@ -425,6 +432,11 @@ def build_shared_rows(
                 "query_smoothed_branch_fraction": query_smoothed,
                 "query_empirical_logit": logit(query_smoothed),
                 "delta_branch_fraction": query_fraction - control_fraction,
+                "control_global_anchored_fraction": control_global_anchored_fraction,
+                "query_global_anchored_fraction": query_global_anchored_fraction,
+                "anchored_enrichment_log2_fold_change": math.log2(
+                    query_global_anchored_fraction / control_global_anchored_fraction
+                ),
                 "log_intron_length": math.log10(max(control["intron_length"], 1)),
                 "donor_maxent": score5(donor_sequence),
                 "acceptor_maxent": score3(acceptor_sequence),
@@ -987,6 +999,7 @@ def main():
     )
 
     numeric_features = [
+        "anchored_enrichment_log2_fold_change",
         "log_intron_length",
         "branchpoint_to_3ss_nt",
         "branchpoint_score",

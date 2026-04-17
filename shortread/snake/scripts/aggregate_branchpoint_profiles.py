@@ -89,6 +89,11 @@ def parse_args():
     parser.add_argument("--plot-upstream", type=int, default=50)
     parser.add_argument("--plot-downstream", type=int, default=10)
     parser.add_argument("--shared-min-reads", type=int, default=0)
+    parser.add_argument("--anchored-enrichment-control-condition")
+    parser.add_argument("--anchored-enrichment-query-condition")
+    parser.add_argument("--anchored-enrichment-denominator-scope", choices=("all", "shared"), default="all")
+    parser.add_argument("--anchored-enrichment-min-log2-fold-change", type=float)
+    parser.add_argument("--anchored-enrichment-max-log2-fold-change", type=float)
     parser.add_argument("--output-metaprofile-by-sample", required=True)
     parser.add_argument("--output-metaprofile-by-condition", required=True)
     parser.add_argument("--output-summary-by-sample", required=True)
@@ -108,6 +113,8 @@ def parse_args():
     parser.add_argument("--output-three-prime-coverage-by-condition", required=True)
     parser.add_argument("--output-three-prime-coverage-plot-png", required=True)
     parser.add_argument("--output-three-prime-coverage-plot-pdf", required=True)
+    parser.add_argument("--output-anchored-enrichment-histogram-png")
+    parser.add_argument("--output-anchored-enrichment-histogram-pdf")
     return parser.parse_args()
 
 
@@ -268,7 +275,23 @@ def summarise_condition_rows(summary_rows, condition_order):
     for row in summary_rows:
         grouped[row["condition"]].append(row)
 
-    numeric_fields = [field for field in summary_rows[0] if field not in {"sample", "condition"}]
+    numeric_fields = []
+    metadata_fields = []
+    for field in summary_rows[0]:
+        if field in {"sample", "condition"}:
+            continue
+        non_empty_values = [entry[field] for entry in summary_rows if entry.get(field, "") not in {"", None}]
+        if not non_empty_values:
+            numeric_fields.append(field)
+            continue
+        try:
+            for value in non_empty_values:
+                float(value)
+        except (TypeError, ValueError):
+            metadata_fields.append(field)
+        else:
+            numeric_fields.append(field)
+
     rows = []
     for condition in condition_order:
         entries = grouped[condition]
@@ -277,9 +300,16 @@ def summarise_condition_rows(summary_rows, condition_order):
             "replicate_count": len(entries),
         }
         for field in numeric_fields:
-            values = [float(entry[field]) for entry in entries]
-            condition_row[f"mean_{field}"] = float_mean(values)
-            condition_row[f"sd_{field}"] = float_sd(values)
+            values = [float(entry[field]) for entry in entries if entry.get(field, "") not in {"", None}]
+            if not values:
+                condition_row[f"mean_{field}"] = ""
+                condition_row[f"sd_{field}"] = ""
+            else:
+                condition_row[f"mean_{field}"] = float_mean(values)
+                condition_row[f"sd_{field}"] = float_sd(values)
+        for field in metadata_fields:
+            values = [entry[field] for entry in entries if entry.get(field, "") not in {"", None}]
+            condition_row[field] = values[0] if values else ""
         rows.append(condition_row)
     return rows
 
@@ -319,6 +349,14 @@ def summarise_condition_profiles(metaprofile_rows, condition_order, extra_group_
 
 
 def build_shared_intron_set(site_counts_by_sample, sample_order, shared_min_reads):
+    if shared_min_reads <= 0:
+        return {
+            intron_id
+            for sample in sample_order
+            for intron_id, row in site_counts_by_sample.get(sample, {}).items()
+            if count_value(row, "anchored_fragments") > 0
+        }
+
     qualifying_sets = []
     for sample in sample_order:
         sample_rows = site_counts_by_sample.get(sample, {})
@@ -334,7 +372,146 @@ def build_shared_intron_set(site_counts_by_sample, sample_order, shared_min_read
     return set.intersection(*qualifying_sets)
 
 
-def build_shared_introns_rows(shared_introns, site_counts_by_sample, site_metadata, sample_order):
+def build_condition_samples(summary_rows, condition_order):
+    grouped = defaultdict(list)
+    for row in summary_rows:
+        grouped[row["condition"]].append(row["sample"])
+    return {condition: grouped[condition] for condition in condition_order}
+
+
+def pooled_anchored_fragments_for_intron(site_counts_by_sample, intron_id, sample_names):
+    return sum(
+        count_value(site_counts_by_sample.get(sample, {}).get(intron_id, {}), "anchored_fragments")
+        for sample in sample_names
+    )
+
+
+def pooled_anchored_fragments_by_condition(site_counts_by_sample, condition_samples, intron_ids=None):
+    totals = {}
+    for condition, sample_names in condition_samples.items():
+        if intron_ids is None:
+            totals[condition] = sum(
+                count_value(row, "anchored_fragments")
+                for sample in sample_names
+                for row in site_counts_by_sample.get(sample, {}).values()
+            )
+        else:
+            totals[condition] = sum(
+                count_value(site_counts_by_sample.get(sample, {}).get(intron_id, {}), "anchored_fragments")
+                for sample in sample_names
+                for intron_id in intron_ids
+            )
+    return totals
+
+
+def compute_anchored_enrichment_log2_fold_change(
+    control_anchored_fragments,
+    query_anchored_fragments,
+    control_total_anchored_fragments,
+    query_total_anchored_fragments,
+):
+    if (
+        control_anchored_fragments <= 0
+        or query_anchored_fragments <= 0
+        or control_total_anchored_fragments <= 0
+        or query_total_anchored_fragments <= 0
+    ):
+        return None
+    control_share = control_anchored_fragments / control_total_anchored_fragments
+    query_share = query_anchored_fragments / query_total_anchored_fragments
+    return math.log2(query_share / control_share)
+
+
+def filter_shared_introns_by_anchored_enrichment(
+    shared_introns,
+    site_counts_by_sample,
+    condition_samples,
+    control_condition,
+    query_condition,
+    denominator_scope,
+    min_log2_fold_change,
+    max_log2_fold_change,
+):
+    if denominator_scope == "all":
+        condition_totals = pooled_anchored_fragments_by_condition(site_counts_by_sample, condition_samples)
+    elif denominator_scope == "shared":
+        condition_totals = pooled_anchored_fragments_by_condition(
+            site_counts_by_sample,
+            condition_samples,
+            shared_introns,
+        )
+    else:
+        raise ValueError(f"Unsupported anchored-enrichment denominator scope: {denominator_scope}")
+    filter_active = min_log2_fold_change is not None or max_log2_fold_change is not None
+
+    if filter_active:
+        if not control_condition or not query_condition:
+            raise ValueError(
+                "Anchored-enrichment filtering requires both control and query condition names"
+            )
+        if control_condition not in condition_samples:
+            raise ValueError(f"Unknown anchored-enrichment control condition: {control_condition}")
+        if query_condition not in condition_samples:
+            raise ValueError(f"Unknown anchored-enrichment query condition: {query_condition}")
+
+    intron_metrics = {}
+    retained_introns = set()
+    control_samples = condition_samples.get(control_condition, [])
+    query_samples = condition_samples.get(query_condition, [])
+    control_total = condition_totals.get(control_condition, 0)
+    query_total = condition_totals.get(query_condition, 0)
+
+    for intron_id in shared_introns:
+        control_count = pooled_anchored_fragments_for_intron(site_counts_by_sample, intron_id, control_samples)
+        query_count = pooled_anchored_fragments_for_intron(site_counts_by_sample, intron_id, query_samples)
+        log2_fold_change = compute_anchored_enrichment_log2_fold_change(
+            control_count,
+            query_count,
+            control_total,
+            query_total,
+        )
+        passes_filter = True
+        if min_log2_fold_change is not None and (
+            log2_fold_change is None or log2_fold_change < min_log2_fold_change
+        ):
+            passes_filter = False
+        if max_log2_fold_change is not None and (
+            log2_fold_change is None or log2_fold_change > max_log2_fold_change
+        ):
+            passes_filter = False
+        if passes_filter:
+            retained_introns.add(intron_id)
+        intron_metrics[intron_id] = {
+            "pooled_control_anchored_fragments": control_count,
+            "pooled_query_anchored_fragments": query_count,
+            "anchored_enrichment_log2_fold_change": log2_fold_change,
+            "passes_anchored_enrichment_filter": passes_filter,
+        }
+
+    if not filter_active:
+        retained_introns = set(shared_introns)
+
+    filter_metadata = {
+        "filter_active": filter_active,
+        "control_condition": control_condition or "",
+        "query_condition": query_condition or "",
+        "denominator_scope": denominator_scope,
+        "min_log2_fold_change": min_log2_fold_change,
+        "max_log2_fold_change": max_log2_fold_change,
+        "pre_filter_shared_introns": len(shared_introns),
+        "retained_shared_introns": len(retained_introns),
+        "removed_shared_introns": len(shared_introns) - len(retained_introns),
+    }
+    return retained_introns, intron_metrics, filter_metadata
+
+
+def build_shared_introns_rows(
+    shared_introns,
+    site_counts_by_sample,
+    site_metadata,
+    sample_order,
+    anchored_enrichment_metrics,
+):
     fieldnames = [
         "intron_id",
         "gene_id",
@@ -353,6 +530,9 @@ def build_shared_introns_rows(shared_introns, site_counts_by_sample, site_metada
         "branchpoint_motif_sequence",
         "branchpoint_motif_category",
         "min_anchored_fragments_all_samples",
+        "pooled_control_anchored_fragments",
+        "pooled_query_anchored_fragments",
+        "anchored_enrichment_log2_fold_change",
     ] + [f"{sample}_anchored_fragments" for sample in sample_order]
 
     rows = []
@@ -380,6 +560,15 @@ def build_shared_introns_rows(shared_introns, site_counts_by_sample, site_metada
             "branchpoint_motif_sequence": metadata.get("branchpoint_motif_sequence", ""),
             "branchpoint_motif_category": metadata.get("branchpoint_motif_category", ""),
             "min_anchored_fragments_all_samples": min(per_sample_counts) if per_sample_counts else 0,
+            "pooled_control_anchored_fragments": anchored_enrichment_metrics[intron_id][
+                "pooled_control_anchored_fragments"
+            ],
+            "pooled_query_anchored_fragments": anchored_enrichment_metrics[intron_id][
+                "pooled_query_anchored_fragments"
+            ],
+            "anchored_enrichment_log2_fold_change": anchored_enrichment_metrics[intron_id][
+                "anchored_enrichment_log2_fold_change"
+            ],
         }
         for sample, count in zip(sample_order, per_sample_counts):
             row[f"{sample}_anchored_fragments"] = count
@@ -533,6 +722,7 @@ def build_sample_summary_row(
     total_offset_counts,
     shared_introns,
     shared_min_reads,
+    anchored_enrichment_filter,
 ):
     summary_row = dict(raw_summary_row)
     library_fragments = count_value(raw_summary_row, "library_fragments")
@@ -548,6 +738,26 @@ def build_sample_summary_row(
 
     summary_row["shared_min_reads_all_samples"] = shared_min_reads
     summary_row["shared_introns"] = len(shared_introns)
+    summary_row["shared_introns_before_anchored_enrichment_filter"] = anchored_enrichment_filter[
+        "pre_filter_shared_introns"
+    ]
+    summary_row["shared_introns_removed_by_anchored_enrichment_filter"] = anchored_enrichment_filter[
+        "removed_shared_introns"
+    ]
+    summary_row["anchored_enrichment_filter_applied"] = int(anchored_enrichment_filter["filter_active"])
+    summary_row["anchored_enrichment_control_condition"] = anchored_enrichment_filter["control_condition"]
+    summary_row["anchored_enrichment_query_condition"] = anchored_enrichment_filter["query_condition"]
+    summary_row["anchored_enrichment_denominator_scope"] = anchored_enrichment_filter["denominator_scope"]
+    summary_row["anchored_enrichment_min_log2_fold_change"] = (
+        ""
+        if anchored_enrichment_filter["min_log2_fold_change"] is None
+        else anchored_enrichment_filter["min_log2_fold_change"]
+    )
+    summary_row["anchored_enrichment_max_log2_fold_change"] = (
+        ""
+        if anchored_enrichment_filter["max_log2_fold_change"] is None
+        else anchored_enrichment_filter["max_log2_fold_change"]
+    )
     summary_row["raw_anchored_fragments"] = raw_anchored_fragments
     summary_row["raw_anchored_introns_with_reads"] = raw_anchored_introns
     summary_row["anchored_fragments"] = anchored_fragments
@@ -591,6 +801,101 @@ def build_sample_summary_row(
     return summary_row
 
 
+def format_anchored_enrichment_filter_label(anchored_enrichment_filter):
+    if not anchored_enrichment_filter["filter_active"]:
+        return ""
+
+    metric = (
+        f"log2({anchored_enrichment_filter['query_condition']} anchored share / "
+        f"{anchored_enrichment_filter['control_condition']} anchored share)"
+    )
+    if anchored_enrichment_filter["denominator_scope"] == "shared":
+        metric += " within shared introns"
+    min_value = anchored_enrichment_filter["min_log2_fold_change"]
+    max_value = anchored_enrichment_filter["max_log2_fold_change"]
+
+    if min_value is not None and max_value is not None:
+        return f"Anchored abundance filter: {min_value:g} <= {metric} <= {max_value:g}"
+    if min_value is not None:
+        return f"Anchored abundance filter: {metric} >= {min_value:g}"
+    return f"Anchored abundance filter: {metric} <= {max_value:g}"
+
+
+def plot_anchored_enrichment_histogram(
+    anchored_enrichment_metrics,
+    anchored_enrichment_filter,
+    output_png,
+    output_pdf,
+):
+    if not output_png and not output_pdf:
+        return
+    if bool(output_png) != bool(output_pdf):
+        raise ValueError("Anchored-enrichment histogram outputs must provide both PNG and PDF paths")
+
+    values = [
+        metrics["anchored_enrichment_log2_fold_change"]
+        for metrics in anchored_enrichment_metrics.values()
+        if metrics["anchored_enrichment_log2_fold_change"] is not None
+    ]
+    if not values:
+        raise ValueError("No finite anchored-enrichment values available for plotting")
+
+    retained_values = [
+        metrics["anchored_enrichment_log2_fold_change"]
+        for metrics in anchored_enrichment_metrics.values()
+        if metrics["anchored_enrichment_log2_fold_change"] is not None
+        and metrics["passes_anchored_enrichment_filter"]
+    ]
+    filtered_values = [
+        metrics["anchored_enrichment_log2_fold_change"]
+        for metrics in anchored_enrichment_metrics.values()
+        if metrics["anchored_enrichment_log2_fold_change"] is not None
+        and not metrics["passes_anchored_enrichment_filter"]
+    ]
+
+    figure, axis = plt.subplots(1, 1, figsize=(7.5, 4.8), constrained_layout=True)
+    bins = 60
+    if anchored_enrichment_filter["filter_active"]:
+        axis.hist(
+            [filtered_values, retained_values],
+            bins=bins,
+            stacked=True,
+            color=["#bdbdbd", "#2b8cbe"],
+            label=[
+                f"Filtered out (n={len(filtered_values)})",
+                f"Retained (n={len(retained_values)})",
+            ],
+        )
+    else:
+        axis.hist(values, bins=bins, color="#2b8cbe", label=f"Shared introns (n={len(values)})")
+
+    min_cutoff = anchored_enrichment_filter["min_log2_fold_change"]
+    max_cutoff = anchored_enrichment_filter["max_log2_fold_change"]
+    if min_cutoff is not None:
+        axis.axvline(min_cutoff, color="#1f1f1f", linestyle="--", linewidth=1.5, label=f"min cutoff {min_cutoff:g}")
+    if max_cutoff is not None:
+        axis.axvline(max_cutoff, color="#1f1f1f", linestyle=":", linewidth=1.5, label=f"max cutoff {max_cutoff:g}")
+
+    control_condition = anchored_enrichment_filter["control_condition"] or "control"
+    query_condition = anchored_enrichment_filter["query_condition"] or "query"
+    denominator_label = "shared introns" if anchored_enrichment_filter["denominator_scope"] == "shared" else "all introns"
+    axis.set_xlabel(
+        f"log2({query_condition} anchored share / {control_condition} anchored share; denominator: {denominator_label})"
+    )
+    axis.set_ylabel("Shared introns")
+    axis.set_title(
+        "Anchored abundance enrichment across pre-filter shared introns\n"
+        f"n={len(values)} before filter; {len(retained_values)} retained"
+    )
+    axis.legend(frameon=False)
+    axis.spines["top"].set_visible(False)
+    axis.spines["right"].set_visible(False)
+
+    figure.savefig(output_png, dpi=300)
+    figure.savefig(output_pdf)
+    plt.close(figure)
+
+
 def plot_metaprofile_figure(
     sample_rows,
     condition_rows,
@@ -605,6 +910,7 @@ def plot_metaprofile_figure(
     xlabel,
     ylabel,
     title,
+    filter_label,
     output_png,
     output_pdf,
 ):
@@ -641,8 +947,12 @@ def plot_metaprofile_figure(
     ax_profile.set_xlim(-plot_upstream, plot_downstream)
     ax_profile.set_xlabel(xlabel)
     ax_profile.set_ylabel(ylabel)
+    title_lines = [title]
     if shared_min_reads > 0:
-        title += f"\nShared introns with >= {shared_min_reads} anchored reads in every sample"
+        title_lines.append(f"Shared introns with >= {shared_min_reads} anchored reads in every sample")
+    if filter_label:
+        title_lines.append(filter_label)
+    title = "\n".join(title_lines)
     ax_profile.set_title(title)
     ax_profile.legend(frameon=False)
 
@@ -694,6 +1004,7 @@ def plot_single_panel_metaprofile_figure(
     xlabel,
     ylabel,
     title,
+    filter_label,
     output_png,
     output_pdf,
 ):
@@ -728,8 +1039,12 @@ def plot_single_panel_metaprofile_figure(
     axis.set_ylim(0.0, 1.0 if visible_y_max == 0 else visible_y_max * 1.08)
     axis.set_xlabel(xlabel)
     axis.set_ylabel(ylabel)
+    title_lines = [title]
     if shared_min_reads > 0:
-        title += f"\nShared introns with >= {shared_min_reads} anchored reads in every sample"
+        title_lines.append(f"Shared introns with >= {shared_min_reads} anchored reads in every sample")
+    if filter_label:
+        title_lines.append(filter_label)
+    title = "\n".join(title_lines)
     axis.set_title(title)
     axis.legend(frameon=False)
     axis.spines["top"].set_visible(False)
@@ -748,6 +1063,7 @@ def plot_results(
     shared_min_reads,
     plot_upstream,
     plot_downstream,
+    filter_label,
     output_png,
     output_pdf,
     coverage_output_png=None,
@@ -767,6 +1083,7 @@ def plot_results(
         "Read1 5' end offset from selected branchpoint (nt; + toward intron 3' end)",
         "Anchored shared-intron fragments (%)",
         "Branchpoint-centred 5' end metaprofile",
+        filter_label,
         output_png,
         output_pdf,
     )
@@ -786,6 +1103,7 @@ def plot_results(
             "Offset from selected branchpoint (nt; + toward intron 3' end)",
             "Estimated anchored-fragment coverage (%)",
             "Branchpoint-centred fragment coverage\nAssuming anchored 3' ends align to the 3' splice site",
+            filter_label,
             coverage_output_png,
             coverage_output_pdf,
         )
@@ -810,6 +1128,8 @@ def main():
     args = parse_args()
     if bool(args.output_coverage_plot_png) != bool(args.output_coverage_plot_pdf):
         raise ValueError("Coverage plot outputs must provide both PNG and PDF paths")
+    if bool(args.output_anchored_enrichment_histogram_png) != bool(args.output_anchored_enrichment_histogram_pdf):
+        raise ValueError("Anchored-enrichment histogram outputs must provide both PNG and PDF paths")
 
     raw_metaprofile_rows = []
     for path in args.metaprofiles:
@@ -829,6 +1149,7 @@ def main():
     raw_summary_rows.sort(key=lambda row: (condition_order.index(row["condition"]), row["sample"]))
     sample_order = [row["sample"] for row in raw_summary_rows]
     raw_summary_by_sample = {row["sample"]: row for row in raw_summary_rows}
+    condition_samples = build_condition_samples(raw_summary_rows, condition_order)
     three_prime_upstream, three_prime_downstream = require_single_window(
         raw_summary_rows,
         "three_prime_coverage_upstream_nt",
@@ -868,13 +1189,27 @@ def main():
         raise ValueError(f"Missing 3'SS coverage inputs for samples: {', '.join(missing_three_prime_samples)}")
 
     shared_introns = build_shared_intron_set(site_counts_by_sample, sample_order, args.shared_min_reads)
+    shared_introns, anchored_enrichment_metrics, anchored_enrichment_filter = (
+        filter_shared_introns_by_anchored_enrichment(
+            shared_introns,
+            site_counts_by_sample,
+            condition_samples,
+            args.anchored_enrichment_control_condition,
+            args.anchored_enrichment_query_condition,
+            args.anchored_enrichment_denominator_scope,
+            args.anchored_enrichment_min_log2_fold_change,
+            args.anchored_enrichment_max_log2_fold_change,
+        )
+    )
     shared_intron_rows, shared_intron_fieldnames = build_shared_introns_rows(
         shared_introns,
         site_counts_by_sample,
         site_metadata,
         sample_order,
+        anchored_enrichment_metrics,
     )
     shared_introns_by_motif = split_shared_introns_by_motif_category(shared_introns, site_metadata)
+    filter_label = format_anchored_enrichment_filter_label(anchored_enrichment_filter)
     three_prime_coverage_by_sample = {}
     for sample in sample_order:
         _, three_prime_coverage_totals = aggregate_three_prime_coverage_from_path(
@@ -918,6 +1253,7 @@ def main():
                 total_offset_counts,
                 shared_introns,
                 args.shared_min_reads,
+                anchored_enrichment_filter,
             )
         )
         for motif_category in BRANCHPOINT_MOTIF_CATEGORIES:
@@ -1012,6 +1348,7 @@ def main():
         args.shared_min_reads,
         args.plot_upstream,
         args.plot_downstream,
+        filter_label,
         args.output_plot_png,
         args.output_plot_pdf,
         args.output_coverage_plot_png,
@@ -1043,6 +1380,7 @@ def main():
             f"{BRANCHPOINT_MOTIF_LABELS[motif_category]} "
             f"({len(shared_introns_by_motif[motif_category])} shared introns)\n"
             f"Canonical motif: {args.canonical_branchpoint_motif.upper().replace('T', 'U')}",
+            filter_label,
             output_png,
             output_pdf,
         )
@@ -1059,11 +1397,21 @@ def main():
         "Offset from intron 3' splice site (nt; + downstream of the 3'SS)",
         "3'SS-spanning fragment coverage (%)",
         "3' splice site-centred fragment coverage",
+        filter_label,
         args.output_three_prime_coverage_plot_png,
         args.output_three_prime_coverage_plot_pdf,
     )
+    plot_anchored_enrichment_histogram(
+        anchored_enrichment_metrics,
+        anchored_enrichment_filter,
+        args.output_anchored_enrichment_histogram_png,
+        args.output_anchored_enrichment_histogram_pdf,
+    )
 
-    print(f"Shared introns retained: {len(shared_introns)}")
+    print(
+        f"Shared introns retained: {len(shared_introns)} "
+        f"(from {anchored_enrichment_filter['pre_filter_shared_introns']} before anchored-enrichment filtering)"
+    )
     print(
         "Shared introns by branchpoint motif: "
         + ", ".join(
@@ -1071,6 +1419,8 @@ def main():
         )
     )
     print(f"Minimum anchored reads in all samples: {args.shared_min_reads}")
+    if anchored_enrichment_filter["filter_active"]:
+        print(filter_label)
     print(f"Metaprofile rows aggregated: {len(sample_profile_rows)}")
     print(f"Branchpoint motif coverage rows aggregated: {len(sample_motif_coverage_rows)}")
     print(f"3'SS coverage rows aggregated: {len(sample_three_prime_rows)}")

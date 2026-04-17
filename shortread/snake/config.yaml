@@ -57,6 +57,9 @@ branchpoint_analysis:
   mane_gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz
   branchpoints: annotation/colaseq_branchpoints_scores.txt
   anchor_window: 5
+  anchor_upstream: 5
+  anchor_downstream: 1
+  downstream_exon_min_offset: 5
   profile_upstream: 100
   profile_downstream: 100
   plot_upstream: 50
@@ -65,6 +68,11 @@ branchpoint_analysis:
   three_prime_coverage_upstream: 100
   three_prime_coverage_downstream: 100
   shared_min_reads_all_samples: 5
+  shared_anchored_enrichment_control_condition: ILS
+  shared_anchored_enrichment_query_condition: DIS
+  shared_anchored_enrichment_denominator_scope: shared
+  shared_anchored_enrichment_min_log2_fold_change: null
+  shared_anchored_enrichment_max_log2_fold_change: null
   readthrough_profile_upstream: 100
   readthrough_profile_downstream: 100
   readthrough_shared_min_reads_all_samples: 5
@@ -109,6 +117,15 @@ branchpoint_analysis:
   relative_feature_intron_gc_window: 100
   relative_feature_three_prime_window: 20
   relative_feature_residual_quantile_fraction: 0.1
+  relative_feature_logo_bp_upstream: 10
+  relative_feature_logo_bp_downstream: 10
+  relative_feature_logo_five_prime_upstream: 5
+  relative_feature_logo_five_prime_downstream: 10
+  relative_feature_logo_three_prime_upstream: 20
+  relative_feature_logo_three_prime_downstream: 3
+  query_branch_group_threshold: 0.25
+  query_branch_group_reference_residual_quantile_fraction: 0.1
+  control_enriched_quantile_fraction: 0.1
 
 premrna_analysis:
   mane_gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz
