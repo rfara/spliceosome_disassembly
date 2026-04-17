@@ -1,0 +1,1981 @@
+from pathlib import Path
+import shlex
+
+
+WORKFLOW_DIR = Path(workflow.basedir).resolve()
+REPO_ROOT = WORKFLOW_DIR.parent
+RESULTS_DIR = WORKFLOW_DIR / "results"
+LOG_DIR = WORKFLOW_DIR / "logs"
+BENCHMARK_DIR = WORKFLOW_DIR / "benchmarks"
+ENV_YAML = WORKFLOW_DIR / "envs" / "rnaseq_pipeline.yml"
+SCRIPTS_DIR = WORKFLOW_DIR / "scripts"
+R_SCRIPTS_DIR = WORKFLOW_DIR / "r"
+
+configfile: str(WORKFLOW_DIR / "config.yaml")
+
+shell.executable("bash")
+
+
+def repo_path(path_string):
+    path = Path(path_string)
+    if path.is_absolute():
+        return str(path)
+    return str((REPO_ROOT / path).resolve())
+
+
+def results_path(*parts):
+    return str((RESULTS_DIR.joinpath(*parts)).resolve())
+
+
+def plot_path(*parts):
+    return results_path("plots", *parts)
+
+
+def log_path(*parts):
+    return str((LOG_DIR.joinpath(*parts)).resolve())
+
+
+def benchmark_path(*parts):
+    return str((BENCHMARK_DIR.joinpath(*parts)).resolve())
+
+
+SAMPLES = list(config["samples"].keys())
+BRANCHPOINT_CFG = config["branchpoint_analysis"]
+PREMRNA_CFG = config["premrna_analysis"]
+
+BT2_SUFFIXES = [
+    ".1.bt2",
+    ".2.bt2",
+    ".3.bt2",
+    ".4.bt2",
+    ".rev.1.bt2",
+    ".rev.2.bt2",
+]
+
+RRNA_INDEX_PREFIX = results_path("reference", "rrna", "rrna")
+SNRNA_INDEX_PREFIX = results_path("reference", "snrna", "snrna")
+STAR_INDEX_DIR = results_path("reference", "star_genome")
+SLURM_TIME_LIMITS = config["slurm"]["time_limits"]
+BRANCHPOINT_GTF = repo_path(BRANCHPOINT_CFG["mane_gtf"])
+PREMRNA_GTF = repo_path(PREMRNA_CFG.get("mane_gtf", BRANCHPOINT_CFG["mane_gtf"]))
+BRANCHPOINT_SCORE_FILE = repo_path(BRANCHPOINT_CFG["branchpoints"])
+
+PREMRNA_REFERENCE = results_path("processed_data", "premrna_mrna", "reference", "annotation.pkl")
+PREMRNA_SAMPLE_GENE_COUNTS = results_path(
+    "processed_data", "premrna_mrna", "samples", "{sample}.gene_counts.tsv.gz"
+)
+PREMRNA_SAMPLE_COVERAGE = results_path(
+    "processed_data", "premrna_mrna", "samples", "{sample}.three_prime_exonic_coverage.tsv.gz"
+)
+PREMRNA_SAMPLE_SUMMARY = results_path("processed_data", "premrna_mrna", "samples", "{sample}.summary.tsv")
+PREMRNA_COMBINED_METAPROFILE_BY_SAMPLE = results_path(
+    "processed_data",
+    "premrna_mrna",
+    "combined",
+    "three_prime_exonic_coverage.by_sample.tsv",
+)
+PREMRNA_COMBINED_METAPROFILE_BY_CONDITION = results_path(
+    "processed_data",
+    "premrna_mrna",
+    "combined",
+    "three_prime_exonic_coverage.by_condition.tsv",
+)
+PREMRNA_COMBINED_SUMMARY_BY_SAMPLE = results_path(
+    "processed_data", "premrna_mrna", "combined", "summary.by_sample.tsv"
+)
+PREMRNA_COMBINED_SUMMARY_BY_CONDITION = results_path(
+    "processed_data", "premrna_mrna", "combined", "summary.by_condition.tsv"
+)
+PREMRNA_COMBINED_SHARED_GENES = results_path("processed_data", "premrna_mrna", "combined", "shared_genes.tsv")
+
+BRANCHPOINT_REFERENCE = results_path(
+    "processed_data",
+    "branchpoint_metaprofiles",
+    "reference",
+    "mane_select_top_branchpoints.tsv",
+)
+BRANCHPOINT_SAMPLE_METAPROFILE = results_path(
+    "processed_data", "branchpoint_metaprofiles", "samples", "{sample}.metaprofile.tsv"
+)
+BRANCHPOINT_SAMPLE_SUMMARY = results_path(
+    "processed_data", "branchpoint_metaprofiles", "samples", "{sample}.summary.tsv"
+)
+BRANCHPOINT_SAMPLE_SITE_COUNTS = results_path(
+    "processed_data", "branchpoint_metaprofiles", "samples", "{sample}.site_counts.tsv.gz"
+)
+BRANCHPOINT_SAMPLE_INTRON_OFFSETS = results_path(
+    "processed_data", "branchpoint_metaprofiles", "samples", "{sample}.offset_counts.tsv.gz"
+)
+BRANCHPOINT_SAMPLE_THREE_PRIME_COVERAGE = results_path(
+    "processed_data",
+    "branchpoint_metaprofiles",
+    "samples",
+    "{sample}.three_prime_coverage.tsv.gz",
+)
+BRANCHPOINT_COMBINED_METAPROFILE_BY_SAMPLE = results_path(
+    "processed_data", "branchpoint_metaprofiles", "combined", "metaprofile.by_sample.tsv"
+)
+BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION = results_path(
+    "processed_data", "branchpoint_metaprofiles", "combined", "metaprofile.by_condition.tsv"
+)
+BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE = results_path(
+    "processed_data", "branchpoint_metaprofiles", "combined", "summary.by_sample.tsv"
+)
+BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION = results_path(
+    "processed_data", "branchpoint_metaprofiles", "combined", "summary.by_condition.tsv"
+)
+BRANCHPOINT_COMBINED_SHARED_INTRONS = results_path(
+    "processed_data", "branchpoint_metaprofiles", "combined", "shared_introns.tsv"
+)
+BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE = results_path(
+    "processed_data",
+    "branchpoint_metaprofiles",
+    "combined",
+    "three_prime_coverage.by_sample.tsv",
+)
+BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION = results_path(
+    "processed_data",
+    "branchpoint_metaprofiles",
+    "combined",
+    "three_prime_coverage.by_condition.tsv",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_SAMPLE = results_path(
+    "processed_data",
+    "downstream_exon_branchpoint_metaprofiles",
+    "metaprofile.by_sample.tsv",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION = results_path(
+    "processed_data",
+    "downstream_exon_branchpoint_metaprofiles",
+    "metaprofile.by_condition.tsv",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_SAMPLE = results_path(
+    "processed_data",
+    "downstream_exon_branchpoint_metaprofiles",
+    "summary.by_sample.tsv",
+)
+BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_CONDITION = results_path(
+    "processed_data",
+    "downstream_exon_branchpoint_metaprofiles",
+    "summary.by_condition.tsv",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_SUMMARY = results_path(
+    "processed_data",
+    "anchored_percentile_overlap",
+    "percentile_summary.tsv",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INTRONS = results_path(
+    "processed_data",
+    "anchored_percentile_overlap",
+    "intron_counts.tsv.gz",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY = results_path(
+    "processed_data",
+    "anchored_percentile_overlap",
+    "dis_ils_percentile_summary.tsv",
+)
+BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_INTRONS = results_path(
+    "processed_data",
+    "anchored_percentile_overlap",
+    "dis_ils_intron_counts.tsv.gz",
+)
+PLOT_COMBINED_METAPROFILE_PANEL = plot_path("combined_metaprofile_panel.pdf")
+PLOT_PROPORTION_READS_STOP_AT_BP = plot_path("proportion_reads_stop_at_bp.pdf")
+PLOT_DOWNSTREAM_EXON_BRANCHPOINT_METAPROFILE = plot_path("dis_metaprofile_from_downstream_exon.pdf")
+PLOT_PROPORTION_EXONIC = plot_path("proportion_exonic_combined_plot.pdf")
+PLOT_PERCENTILE_ILS_DIS = plot_path("percentile_ils_dis.pdf")
+PLOT_PERCENTILE_DIS_ILS = plot_path("percentile_dis_ils.pdf")
+PLOT_ILS_DIS_PIE = plot_path("ils_dis_pie.pdf")
+PLOT_EXAMPLE_GENE_BROWSER_PDF = plot_path("example_gene_browser_chr12_54282250_54282820.pdf")
+PLOT_EXAMPLE_GENE_BROWSER_PNG = plot_path("example_gene_browser_chr12_54282250_54282820.png")
+PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY = plot_path(
+    "example_gene_browser_chr12_54282250_54282820.coverage_only.pdf"
+)
+PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY = plot_path(
+    "example_gene_browser_chr12_54282250_54282820.reads_only.pdf"
+)
+RNA_CONTENT_REFERENCE = results_path("reference", "rna_content", "annotation.pkl")
+BAM_QC_STAGES = {
+    "premap_rrna": results_path("premap_rrna", "{sample}.rrna.bam"),
+    "premap_snrna": results_path("premap_snrna", "{sample}.snrna.bam"),
+    "star": results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
+    "dedup": results_path("dedup", "{sample}.dedup.bam"),
+}
+
+
+def bowtie2_index_outputs(prefix):
+    return [prefix + suffix for suffix in BT2_SUFFIXES]
+
+
+def sample_fastq(wildcards):
+    return repo_path(config["samples"][wildcards.sample])
+
+
+def sample_fastq_r2(wildcards):
+    r1 = config["samples"][wildcards.sample]
+    if "_R1_" in r1:
+        return repo_path(r1.replace("_R1_", "_R2_"))
+    if "_R1." in r1:
+        return repo_path(r1.replace("_R1.", "_R2."))
+    raise ValueError(f"Could not derive R2 path from R1 path: {r1}")
+def sample_condition(sample):
+    sample_conditions = BRANCHPOINT_CFG.get("sample_conditions", {})
+    if sample in sample_conditions:
+        return sample_conditions[sample]
+    return sample.split("_", 1)[0]
+
+
+def format_cutadapt_adapter(adapter, min_overlap=None, error_rate=None, disallow_internal=False):
+    spec = str(adapter).strip()
+    if disallow_internal and not spec.endswith("X"):
+        spec = f"{spec}X"
+
+    adapter_params = []
+    if error_rate is not None:
+        adapter_params.append(f"e={error_rate}")
+    if min_overlap is not None:
+        adapter_params.append(f"min_overlap={min_overlap}")
+    if adapter_params:
+        spec = f"{spec};" + ";".join(adapter_params)
+    return spec
+
+
+def cutadapt_r1_adapter_args():
+    trim_cfg = config["trim"]
+    adapters = [
+        format_cutadapt_adapter(
+            f"A{{{trim_cfg['poly_a_min']}}}",
+            min_overlap=trim_cfg["poly_a_min"],
+        ),
+        format_cutadapt_adapter(
+            f"G{{{trim_cfg['poly_g_min']}}}",
+            min_overlap=trim_cfg["poly_g_min"],
+            disallow_internal=True,
+        ),
+        *[
+            format_cutadapt_adapter(
+                adapter,
+                min_overlap=trim_cfg.get("adapter_min_overlap", 6),
+            )
+            for adapter in trim_cfg["illumina_3p_adapters"]
+        ],
+    ]
+    return " ".join(f"-a {shlex.quote(adapter)}" for adapter in adapters)
+
+
+def bowtie2_preset(cfg):
+    parts = [cfg["preset"]]
+    extra = cfg.get("extra", "").strip()
+    if extra:
+        parts.append(extra)
+    return " ".join(parts)
+
+
+def star_genome_generate_extra():
+    star_cfg = config["star"]
+    parts = []
+    genome_sa_index_nbases = star_cfg.get("genome_sa_index_nbases")
+    if genome_sa_index_nbases is not None:
+        parts.extend(["--genomeSAindexNbases", str(genome_sa_index_nbases)])
+    extra = star_cfg.get("genome_generate_extra", "").strip()
+    if extra:
+        parts.append(extra)
+    return " ".join(parts)
+
+
+def star_align_extra():
+    extra = config["star"].get("align_extra", "").strip()
+    return extra
+
+
+def cutadapt_r2_adapter():
+    trim_cfg = config["trim"]
+    return format_cutadapt_adapter(
+        trim_cfg["r2_3p_adapter"],
+        min_overlap=trim_cfg.get("r2_adapter_min_overlap", 23),
+        error_rate=trim_cfg.get("r2_adapter_error_rate", 0.2),
+    )
+
+
+def cutadapt_r2_poly_g_adapter():
+    trim_cfg = config["trim"]
+    return format_cutadapt_adapter(
+        f"G{{{trim_cfg['poly_g_min']}}}",
+        min_overlap=trim_cfg["poly_g_min"],
+        disallow_internal=True,
+    )
+
+
+def slurm_cluster_args(qos, mem, job_name, slurm_log_file, threads):
+    partition, tier = qos.split("_", 1)
+    time_limit = SLURM_TIME_LIMITS[tier]
+    parts = [
+        f"--partition={partition}",
+        f"--qos={qos}",
+        f"--time={time_limit}",
+        f"--mem={mem}",
+        f"--cpus-per-task={threads}",
+        f"-J {job_name}",
+        f"-o {slurm_log_file}",
+    ]
+    extra = config["slurm"].get("sbatch_extra", "").strip()
+    if extra:
+        parts.append(extra)
+    return " ".join(parts)
+
+
+TRIM_R1_ADAPTER_ARGS = cutadapt_r1_adapter_args()
+TRIM_R2_ADAPTER = cutadapt_r2_adapter()
+TRIM_R2_POLY_G_ADAPTER = cutadapt_r2_poly_g_adapter()
+PREMAP_ARGS = bowtie2_preset(config["premap"])
+STAR_GENOME_GENERATE_EXTRA = star_genome_generate_extra()
+STAR_ALIGN_EXTRA = star_align_extra()
+INIT_SENTINEL = results_path(".workflow_dirs_initialized")
+WORKFLOW_DIRS = [
+    results_path("reference", "rrna"),
+    results_path("reference", "snrna"),
+    results_path("reference", "star_genome"),
+    results_path("reference", "rna_content"),
+    results_path("trimmed", "r1"),
+    results_path("trimmed", "r2"),
+    results_path("umi", "r1"),
+    results_path("umi", "r2"),
+    results_path("umi", "ready", "r1"),
+    results_path("umi", "ready", "r2"),
+    results_path("premap_rrna"),
+    results_path("premap_snrna"),
+    results_path("star"),
+    results_path("dedup"),
+    results_path("processed_data", "premrna_mrna", "reference"),
+    results_path("processed_data", "premrna_mrna", "samples"),
+    results_path("processed_data", "premrna_mrna", "combined"),
+    results_path("processed_data", "branchpoint_metaprofiles", "reference"),
+    results_path("processed_data", "branchpoint_metaprofiles", "samples"),
+    results_path("processed_data", "branchpoint_metaprofiles", "combined"),
+    results_path("processed_data", "downstream_exon_branchpoint_metaprofiles"),
+    results_path("processed_data", "anchored_percentile_overlap"),
+    results_path("plots"),
+    results_path("qc", "fastqc", "trimmed", "r1"),
+    results_path("qc", "fastqc", "trimmed", "r2"),
+    results_path("qc", "fastqc", "umi", "r1"),
+    results_path("qc", "fastqc", "umi", "r2"),
+    results_path("qc", "fastqc", "star_unmapped", "r1"),
+    results_path("qc", "fastqc", "star_unmapped", "r2"),
+    results_path("qc", "bam", "premap_rrna"),
+    results_path("qc", "bam", "premap_snrna"),
+    results_path("qc", "bam", "star"),
+    results_path("qc", "bam", "dedup"),
+    results_path("qc", "rna_content"),
+    results_path("qc", "star_unmapped"),
+    results_path("tmp", "premap"),
+    results_path("tmp", "trim"),
+    results_path("tmp", "umi_dedup"),
+    log_path("reference"),
+    log_path("trim"),
+    log_path("umi"),
+    log_path("premap_rrna"),
+    log_path("premap_snrna"),
+    log_path("star"),
+    log_path("star_index"),
+    log_path("dedup"),
+    log_path("dedup_index"),
+    log_path("premrna_reference"),
+    log_path("premrna_quantify"),
+    log_path("premrna_aggregate"),
+    log_path("rna_content_reference"),
+    log_path("qc_fastqc"),
+    log_path("qc_bam"),
+    log_path("qc_rna_content"),
+    log_path("branchpoints_reference"),
+    log_path("branchpoints_quantify"),
+    log_path("branchpoints_aggregate"),
+    log_path("branchpoints_downstream_exon"),
+    log_path("branchpoints_anchored_percentile_overlap"),
+    log_path("r_plots"),
+    log_path("slurm"),
+    benchmark_path("reference"),
+    benchmark_path("trim"),
+    benchmark_path("umi"),
+    benchmark_path("premap_rrna"),
+    benchmark_path("premap_snrna"),
+    benchmark_path("star"),
+    benchmark_path("star_index"),
+    benchmark_path("dedup"),
+    benchmark_path("dedup_index"),
+    benchmark_path("premrna_reference"),
+    benchmark_path("premrna_quantify"),
+    benchmark_path("premrna_aggregate"),
+    benchmark_path("rna_content_reference"),
+    benchmark_path("qc_fastqc"),
+    benchmark_path("qc_bam"),
+    benchmark_path("qc_rna_content"),
+    benchmark_path("branchpoints_reference"),
+    benchmark_path("branchpoints_quantify"),
+    benchmark_path("branchpoints_aggregate"),
+    benchmark_path("branchpoints_downstream_exon"),
+    benchmark_path("branchpoints_anchored_percentile_overlap"),
+    benchmark_path("r_plots"),
+]
+
+
+localrules: initialize_workdirs
+
+
+rule all:
+    input:
+        expand(results_path("dedup", "{sample}.dedup.bam"), sample=SAMPLES),
+        expand(results_path("dedup", "{sample}.dedup.bam.bai"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "trimmed", "r1", "{sample}.trimmed_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "trimmed", "r1", "{sample}.trimmed_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_ready_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_ready_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "star_unmapped", "r1", "{sample}.star_unmapped_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "star_unmapped", "r1", "{sample}.star_unmapped_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.html"), sample=SAMPLES),
+        expand(results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.zip"), sample=SAMPLES),
+        expand(results_path("qc", "rna_content", "{sample}.rna_content.tsv"), sample=SAMPLES),
+        expand(results_path("qc", "star_unmapped", "{sample}.summary.tsv"), sample=SAMPLES),
+        expand(results_path("qc", "bam", "{stage}", "{sample}.flagstat.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
+        expand(results_path("qc", "bam", "{stage}", "{sample}.stats.txt"), sample=SAMPLES, stage=BAM_QC_STAGES.keys()),
+        PREMRNA_REFERENCE,
+        expand(PREMRNA_SAMPLE_GENE_COUNTS, sample=SAMPLES),
+        expand(PREMRNA_SAMPLE_COVERAGE, sample=SAMPLES),
+        expand(PREMRNA_SAMPLE_SUMMARY, sample=SAMPLES),
+        PREMRNA_COMBINED_METAPROFILE_BY_SAMPLE,
+        PREMRNA_COMBINED_METAPROFILE_BY_CONDITION,
+        PREMRNA_COMBINED_SUMMARY_BY_SAMPLE,
+        PREMRNA_COMBINED_SUMMARY_BY_CONDITION,
+        PREMRNA_COMBINED_SHARED_GENES,
+        BRANCHPOINT_REFERENCE,
+        expand(BRANCHPOINT_SAMPLE_METAPROFILE, sample=SAMPLES),
+        expand(BRANCHPOINT_SAMPLE_SUMMARY, sample=SAMPLES),
+        expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES),
+        expand(BRANCHPOINT_SAMPLE_INTRON_OFFSETS, sample=SAMPLES),
+        expand(BRANCHPOINT_SAMPLE_THREE_PRIME_COVERAGE, sample=SAMPLES),
+        BRANCHPOINT_COMBINED_METAPROFILE_BY_SAMPLE,
+        BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
+        BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
+        BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION,
+        BRANCHPOINT_COMBINED_SHARED_INTRONS,
+        BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
+        BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
+        BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_SAMPLE,
+        BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION,
+        BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_SAMPLE,
+        BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_CONDITION,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_SUMMARY,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INTRONS,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY,
+        BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_INTRONS,
+        PLOT_COMBINED_METAPROFILE_PANEL,
+        PLOT_PROPORTION_READS_STOP_AT_BP,
+        PLOT_DOWNSTREAM_EXON_BRANCHPOINT_METAPROFILE,
+        PLOT_PROPORTION_EXONIC,
+        PLOT_PERCENTILE_ILS_DIS,
+        PLOT_PERCENTILE_DIS_ILS,
+        PLOT_ILS_DIS_PIE,
+        PLOT_EXAMPLE_GENE_BROWSER_PDF,
+        PLOT_EXAMPLE_GENE_BROWSER_PNG,
+        PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY,
+        PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY,
+
+
+rule initialize_workdirs:
+    output:
+        touch(INIT_SENTINEL)
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {WORKFLOW_DIRS:q}
+        touch {output}
+        """
+
+
+rule build_rrna_index:
+    input:
+        init=INIT_SENTINEL,
+        fasta=repo_path(config["references"]["rrna_fasta"])
+    output:
+        bowtie2_index_outputs(RRNA_INDEX_PREFIX)
+    log:
+        log_path("reference", "rrna_bowtie2_build.log")
+    benchmark:
+        benchmark_path("reference", "rrna_bowtie2_build.tsv")
+    threads: config["resources"]["bowtie2_build_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        prefix=RRNA_INDEX_PREFIX,
+        benchmark_dir=str(Path(benchmark_path("reference", "rrna_bowtie2_build.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "16G",
+            "rrna_idx",
+            log_path("slurm", "rrna_index.%A.log"),
+            config["resources"]["bowtie2_build_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {params.prefix})" "$(dirname {log})" "{params.benchmark_dir}"
+        bowtie2-build \
+          --threads {threads} \
+          {input.fasta} \
+          {params.prefix} \
+          > {log} 2>&1
+        """
+
+
+rule build_snrna_index:
+    input:
+        init=INIT_SENTINEL,
+        fasta=repo_path(config["references"]["snrna_fasta"])
+    output:
+        bowtie2_index_outputs(SNRNA_INDEX_PREFIX)
+    log:
+        log_path("reference", "snrna_bowtie2_build.log")
+    benchmark:
+        benchmark_path("reference", "snrna_bowtie2_build.tsv")
+    threads: config["resources"]["bowtie2_build_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        prefix=SNRNA_INDEX_PREFIX,
+        benchmark_dir=str(Path(benchmark_path("reference", "snrna_bowtie2_build.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "16G",
+            "snrna_idx",
+            log_path("slurm", "snrna_index.%A.log"),
+            config["resources"]["bowtie2_build_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {params.prefix})" "$(dirname {log})" "{params.benchmark_dir}"
+        bowtie2-build \
+          --threads {threads} \
+          {input.fasta} \
+          {params.prefix} \
+          > {log} 2>&1
+        """
+
+
+rule build_star_index:
+    input:
+        init=INIT_SENTINEL,
+        fasta=repo_path(config["references"]["genome_fasta"]),
+        gtf=repo_path(config["references"]["genome_gtf"])
+    output:
+        directory(STAR_INDEX_DIR)
+    log:
+        log_path("reference", "star_genome_generate.log")
+    benchmark:
+        benchmark_path("reference", "star_genome_generate.tsv")
+    threads: config["resources"]["star_index_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        sjdb_overhang=config["star"]["sjdb_overhang"],
+        extra=STAR_GENOME_GENERATE_EXTRA,
+        benchmark_dir=str(Path(benchmark_path("reference", "star_genome_generate.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "m_medium",
+            "128G",
+            "star_idx",
+            log_path("slurm", "star_index.%A.log"),
+            config["resources"]["star_index_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p {output} "$(dirname {log})" "{params.benchmark_dir}"
+        STAR \
+          --runMode genomeGenerate \
+          --runThreadN {threads} \
+          --genomeDir {output} \
+          --genomeFastaFiles {input.fasta} \
+          --sjdbGTFfile {input.gtf} \
+          --sjdbOverhang {params.sjdb_overhang} \
+          {params.extra} \
+          > {log} 2>&1
+        """
+
+
+rule trim_reads:
+    input:
+        init=INIT_SENTINEL,
+        r1=sample_fastq,
+        r2=sample_fastq_r2
+    output:
+        r1=temp(results_path("trimmed", "r1", "{sample}.trimmed.fastq.gz")),
+        r2=temp(results_path("trimmed", "r2", "{sample}.trimmed.fastq.gz"))
+    log:
+        log_path("trim", "{sample}.log")
+    benchmark:
+        benchmark_path("trim", "{sample}.tsv")
+    threads: config["resources"]["trim_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        min_length_r1=config["trim"]["min_length_r1"],
+        min_length_r2=config["trim"]["min_length_r2"],
+        times=config["trim"]["times"],
+        r1_adapter_args=lambda wildcards: TRIM_R1_ADAPTER_ARGS,
+        r2_fixed_5p_sequence=config["trim"]["r2_fixed_5p_sequence"],
+        r2_adapter=lambda wildcards: TRIM_R2_ADAPTER,
+        r2_poly_g_adapter=lambda wildcards: TRIM_R2_POLY_G_ADAPTER,
+        extra=config["trim"].get("extra", ""),
+        tmp_root=results_path("tmp", "trim"),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("trim", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "16G",
+            "trim",
+            log_path("slurm", f"trim.{wildcards.sample}.%A.log"),
+            config["resources"]["trim_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {log})" "{params.benchmark_dir}" "{params.tmp_root}"
+        tmpdir="$(mktemp -d "{params.tmp_root}/{wildcards.sample}.XXXXXX")"
+        trap 'rm -rf "$tmpdir"' EXIT
+        cutadapt \
+          -j {threads} \
+          --times {params.times} \
+          {params.r1_adapter_args} \
+          -G ^{params.r2_fixed_5p_sequence} \
+          -A {params.r2_adapter:q} \
+          --poly-a \
+          {params.extra} \
+          -o "$tmpdir/{wildcards.sample}.step1.r1.fastq.gz" \
+          -p "$tmpdir/{wildcards.sample}.step1.r2.fastq.gz" \
+          {input.r1} \
+          {input.r2} \
+          > {log} 2>&1
+        cutadapt \
+          -j {threads} \
+          --minimum-length {params.min_length_r1}:{params.min_length_r2} \
+          --pair-filter=any \
+          -A {params.r2_poly_g_adapter:q} \
+          -o {output.r1} \
+          -p {output.r2} \
+          "$tmpdir/{wildcards.sample}.step1.r1.fastq.gz" \
+          "$tmpdir/{wildcards.sample}.step1.r2.fastq.gz" \
+          >> {log} 2>&1
+        """
+
+
+rule fastqc_trimmed_reads:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("trimmed", "r1", "{sample}.trimmed.fastq.gz"),
+        r2=results_path("trimmed", "r2", "{sample}.trimmed.fastq.gz")
+    output:
+        r1_html=results_path("qc", "fastqc", "trimmed", "r1", "{sample}.trimmed_fastqc.html"),
+        r1_zip=results_path("qc", "fastqc", "trimmed", "r1", "{sample}.trimmed_fastqc.zip"),
+        r2_html=results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.html"),
+        r2_zip=results_path("qc", "fastqc", "trimmed", "r2", "{sample}.trimmed_fastqc.zip")
+    log:
+        log_path("qc_fastqc", "trimmed.{sample}.log")
+    benchmark:
+        benchmark_path("qc_fastqc", "trimmed.{sample}.tsv")
+    threads: config["resources"]["fastqc_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        outdir_r1=results_path("qc", "fastqc", "trimmed", "r1"),
+        outdir_r2=results_path("qc", "fastqc", "trimmed", "r2"),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_fastqc", f"trimmed.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "fastqc_trim",
+            log_path("slurm", f"fastqc_trim.{wildcards.sample}.%A.log"),
+            config["resources"]["fastqc_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "{params.outdir_r1}" "{params.outdir_r2}" "$(dirname {log})" "{params.benchmark_dir}"
+        fastqc --threads {threads} --outdir "{params.outdir_r1}" {input.r1} > {log} 2>&1
+        fastqc --threads {threads} --outdir "{params.outdir_r2}" {input.r2} >> {log} 2>&1
+        """
+
+
+rule extract_umis:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("trimmed", "r1", "{sample}.trimmed.fastq.gz"),
+        r2=results_path("trimmed", "r2", "{sample}.trimmed.fastq.gz")
+    output:
+        r1=temp(results_path("umi", "r1", "{sample}.umi_extracted.fastq.gz")),
+        r2=temp(results_path("umi", "r2", "{sample}.umi_extracted.fastq.gz"))
+    log:
+        log_path("umi", "{sample}.log")
+    benchmark:
+        benchmark_path("umi", "{sample}.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        extract_method=config["umi"]["extract_method"],
+        bc_pattern=lambda wildcards: config["umi"]["bc_pattern"],
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("umi", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "24G",
+            "umi_extract",
+            log_path("slurm", f"umi_extract.{wildcards.sample}.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {log})" "{params.benchmark_dir}"
+        umi_tools extract \
+          --extract-method={params.extract_method} \
+          --bc-pattern={params.bc_pattern:q} \
+          --stdin={input.r1} \
+          --stdout={output.r1} \
+          --read2-in={input.r2} \
+          --read2-out={output.r2} \
+          --log={log}
+        """
+
+
+rule fastqc_umi_reads:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("umi", "ready", "r1", "{sample}.umi_ready.fastq.gz"),
+        r2=results_path("umi", "ready", "r2", "{sample}.umi_ready.fastq.gz")
+    output:
+        r1_html=results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_ready_fastqc.html"),
+        r1_zip=results_path("qc", "fastqc", "umi", "r1", "{sample}.umi_ready_fastqc.zip"),
+        r2_html=results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.html"),
+        r2_zip=results_path("qc", "fastqc", "umi", "r2", "{sample}.umi_ready_fastqc.zip")
+    log:
+        log_path("qc_fastqc", "umi.{sample}.log")
+    benchmark:
+        benchmark_path("qc_fastqc", "umi.{sample}.tsv")
+    threads: config["resources"]["fastqc_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        outdir_r1=results_path("qc", "fastqc", "umi", "r1"),
+        outdir_r2=results_path("qc", "fastqc", "umi", "r2"),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_fastqc", f"umi.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "fastqc_umi",
+            log_path("slurm", f"fastqc_umi.{wildcards.sample}.%A.log"),
+            config["resources"]["fastqc_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "{params.outdir_r1}" "{params.outdir_r2}" "$(dirname {log})" "{params.benchmark_dir}"
+        fastqc --threads {threads} --outdir "{params.outdir_r1}" {input.r1} > {log} 2>&1
+        fastqc --threads {threads} --outdir "{params.outdir_r2}" {input.r2} >> {log} 2>&1
+        """
+
+
+rule trim_fixed_5p_sequence:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("umi", "r1", "{sample}.umi_extracted.fastq.gz"),
+        r2=results_path("umi", "r2", "{sample}.umi_extracted.fastq.gz")
+    output:
+        r1=results_path("umi", "ready", "r1", "{sample}.umi_ready.fastq.gz"),
+        r2=results_path("umi", "ready", "r2", "{sample}.umi_ready.fastq.gz")
+    log:
+        log_path("umi", "{sample}.fixed_5p_trim.log")
+    benchmark:
+        benchmark_path("umi", "{sample}.fixed_5p_trim.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        fixed_5p_sequence=config["umi"]["fixed_5p_sequence"],
+        error_rate=config["umi"]["fixed_5p_error_rate"],
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("umi", f"{wildcards.sample}.fixed_5p_trim.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "16G",
+            "umi_trim5p",
+            log_path("slurm", f"umi_trim5p.{wildcards.sample}.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.r1})" "$(dirname {output.r2})" "$(dirname {log})" "{params.benchmark_dir}"
+        cutadapt \
+          -j {threads} \
+          -g ^{params.fixed_5p_sequence} \
+          --error-rate {params.error_rate} \
+          --discard-untrimmed \
+          -o {output.r1} \
+          -p {output.r2} \
+          {input.r1} \
+          {input.r2} \
+          > {log} 2>&1
+        """
+
+
+rule premap_rrna:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("umi", "ready", "r1", "{sample}.umi_ready.fastq.gz"),
+        r2=results_path("umi", "ready", "r2", "{sample}.umi_ready.fastq.gz"),
+        index=bowtie2_index_outputs(RRNA_INDEX_PREFIX)
+    output:
+        bam=results_path("premap_rrna", "{sample}.rrna.bam"),
+        unmapped_r1=temp(results_path("premap_rrna", "{sample}.rrna_unmapped.1.fastq.gz")),
+        unmapped_r2=temp(results_path("premap_rrna", "{sample}.rrna_unmapped.2.fastq.gz"))
+    log:
+        log_path("premap_rrna", "{sample}.log")
+    benchmark:
+        benchmark_path("premap_rrna", "{sample}.tsv")
+    threads: config["resources"]["premap_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        index_prefix=RRNA_INDEX_PREFIX,
+        args=PREMAP_ARGS,
+        temp_bam=lambda wildcards: results_path("tmp", "premap", f"{wildcards.sample}.rrna_premap.raw.bam"),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_rrna", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "32G",
+            "rrna_map",
+            log_path("slurm", f"rrna_map.{wildcards.sample}.%A.log"),
+            config["resources"]["premap_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {params.temp_bam})" "{params.benchmark_dir}"
+        bowtie2 \
+          --threads {threads} \
+          -x {params.index_prefix} \
+          -1 {input.r1} \
+          -2 {input.r2} \
+          --no-discordant \
+          -k 1 \
+          {params.args} \
+          2> {log} \
+        | samtools view -@ {threads} -u - > {params.temp_bam}
+        samtools view -@ {threads} -u -F 12 {params.temp_bam} \
+        | samtools sort -@ {threads} -o {output.bam} -
+        samtools view -@ {threads} -u -f 12 {params.temp_bam} \
+        | samtools collate -@ {threads} -u -O - \
+        | samtools fastq \
+            -1 >(gzip -c > {output.unmapped_r1}) \
+            -2 >(gzip -c > {output.unmapped_r2}) \
+            -0 /dev/null \
+            -s /dev/null \
+            -n -
+        rm -f {params.temp_bam}
+        """
+
+
+rule premap_snrna:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("premap_rrna", "{sample}.rrna_unmapped.1.fastq.gz"),
+        r2=results_path("premap_rrna", "{sample}.rrna_unmapped.2.fastq.gz"),
+        index=bowtie2_index_outputs(SNRNA_INDEX_PREFIX)
+    output:
+        bam=results_path("premap_snrna", "{sample}.snrna.bam"),
+        unmapped_r1=temp(results_path("premap_snrna", "{sample}.snrna_unmapped.1.fastq.gz")),
+        unmapped_r2=temp(results_path("premap_snrna", "{sample}.snrna_unmapped.2.fastq.gz"))
+    log:
+        log_path("premap_snrna", "{sample}.log")
+    benchmark:
+        benchmark_path("premap_snrna", "{sample}.tsv")
+    threads: config["resources"]["premap_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        index_prefix=SNRNA_INDEX_PREFIX,
+        args=PREMAP_ARGS,
+        temp_bam=lambda wildcards: results_path("tmp", "premap", f"{wildcards.sample}.snrna_premap.raw.bam"),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("premap_snrna", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "32G",
+            "snrna_map",
+            log_path("slurm", f"snrna_map.{wildcards.sample}.%A.log"),
+            config["resources"]["premap_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "$(dirname {params.temp_bam})" "{params.benchmark_dir}"
+        bowtie2 \
+          --threads {threads} \
+          -x {params.index_prefix} \
+          -1 {input.r1} \
+          -2 {input.r2} \
+          --no-discordant \
+          -k 1 \
+          {params.args} \
+          2> {log} \
+        | samtools view -@ {threads} -u - > {params.temp_bam}
+        samtools view -@ {threads} -u -F 12 {params.temp_bam} \
+        | samtools sort -@ {threads} -o {output.bam} -
+        samtools view -@ {threads} -u -f 12 {params.temp_bam} \
+        | samtools collate -@ {threads} -u -O - \
+        | samtools fastq \
+            -1 >(gzip -c > {output.unmapped_r1}) \
+            -2 >(gzip -c > {output.unmapped_r2}) \
+            -0 /dev/null \
+            -s /dev/null \
+            -n -
+        rm -f {params.temp_bam}
+        """
+
+
+rule map_genome_star:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("premap_snrna", "{sample}.snrna_unmapped.1.fastq.gz"),
+        r2=results_path("premap_snrna", "{sample}.snrna_unmapped.2.fastq.gz"),
+        index=STAR_INDEX_DIR
+    output:
+        bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
+        summary=results_path("star", "{sample}.Log.final.out"),
+        junctions=results_path("star", "{sample}.SJ.out.tab"),
+        unmapped_r1=results_path("star", "{sample}.Unmapped.out.mate1"),
+        unmapped_r2=results_path("star", "{sample}.Unmapped.out.mate2")
+    log:
+        log_path("star", "{sample}.log")
+    benchmark:
+        benchmark_path("star", "{sample}.tsv")
+    threads: config["resources"]["star_map_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        prefix=lambda wildcards: results_path("star", f"{wildcards.sample}."),
+        sort_ram=config["star"]["limit_bam_sort_ram"],
+        align_extra=STAR_ALIGN_EXTRA,
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("star", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "m_medium",
+            "96G",
+            "star_map",
+            log_path("slurm", f"star_map.{wildcards.sample}.%A.log"),
+            config["resources"]["star_map_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bam})" "$(dirname {log})" "{params.benchmark_dir}"
+        STAR \
+          --runThreadN {threads} \
+          --genomeDir {input.index} \
+          --readFilesIn {input.r1} {input.r2} \
+          --readFilesCommand zcat \
+          --outReadsUnmapped Fastx \
+          --outSAMtype BAM SortedByCoordinate \
+          --outSAMattributes NH HI AS nM MD \
+          --limitBAMsortRAM {params.sort_ram} \
+          --outFileNamePrefix {params.prefix} \
+          {params.align_extra} \
+          > {log} 2>&1
+        rm -f {params.prefix}Log.out {params.prefix}Log.progress.out
+        """
+
+
+rule fastqc_star_unmapped_reads:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("star", "{sample}.Unmapped.out.mate1"),
+        r2=results_path("star", "{sample}.Unmapped.out.mate2")
+    output:
+        r1_html=results_path("qc", "fastqc", "star_unmapped", "r1", "{sample}.star_unmapped_fastqc.html"),
+        r1_zip=results_path("qc", "fastqc", "star_unmapped", "r1", "{sample}.star_unmapped_fastqc.zip"),
+        r2_html=results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.html"),
+        r2_zip=results_path("qc", "fastqc", "star_unmapped", "r2", "{sample}.star_unmapped_fastqc.zip")
+    log:
+        log_path("qc_fastqc", "star_unmapped.{sample}.log")
+    benchmark:
+        benchmark_path("qc_fastqc", "star_unmapped.{sample}.tsv")
+    threads: config["resources"]["fastqc_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        outdir_r1=results_path("qc", "fastqc", "star_unmapped", "r1"),
+        outdir_r2=results_path("qc", "fastqc", "star_unmapped", "r2"),
+        # Keep the alias path literal so forced reruns do not resolve the existing
+        # symlink back to the STAR input and try to relink a file onto itself.
+        alias_r1=lambda wildcards: str(RESULTS_DIR.joinpath(
+            "qc", "fastqc", "star_unmapped", "r1", f"{wildcards.sample}.star_unmapped.fastq"
+        )),
+        alias_r2=lambda wildcards: str(RESULTS_DIR.joinpath(
+            "qc", "fastqc", "star_unmapped", "r2", f"{wildcards.sample}.star_unmapped.fastq"
+        )),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_fastqc", f"star_unmapped.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "fastqc_star_um",
+            log_path("slurm", f"fastqc_star_unmapped.{wildcards.sample}.%A.log"),
+            config["resources"]["fastqc_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "{params.outdir_r1}" "{params.outdir_r2}" "$(dirname {log})" "{params.benchmark_dir}"
+        ln -sf "{input.r1}" "{params.alias_r1}"
+        ln -sf "{input.r2}" "{params.alias_r2}"
+        fastqc --threads {threads} --outdir "{params.outdir_r1}" "{params.alias_r1}" > {log} 2>&1
+        fastqc --threads {threads} --outdir "{params.outdir_r2}" "{params.alias_r2}" >> {log} 2>&1
+        """
+
+
+rule summarize_star_unmapped_reads:
+    input:
+        init=INIT_SENTINEL,
+        r1=results_path("star", "{sample}.Unmapped.out.mate1"),
+        r2=results_path("star", "{sample}.Unmapped.out.mate2")
+    output:
+        summary=results_path("qc", "star_unmapped", "{sample}.summary.tsv")
+    log:
+        log_path("qc_bam", "star_unmapped.{sample}.log")
+    benchmark:
+        benchmark_path("qc_bam", "star_unmapped.{sample}.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "summarize_star_unmapped_reads.py").resolve()),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_bam", f"star_unmapped.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "star_um_sum",
+            log_path("slurm", f"star_unmapped_summary.{wildcards.sample}.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} {input.r1} {input.r2} {output.summary} > {log} 2>&1
+        """
+
+
+rule build_rna_content_reference:
+    input:
+        init=INIT_SENTINEL,
+        gtf=repo_path(config["references"]["genome_gtf"])
+    output:
+        reference=RNA_CONTENT_REFERENCE
+    log:
+        log_path("rna_content_reference", "build.log")
+    benchmark:
+        benchmark_path("rna_content_reference", "build.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "build_rna_content_reference.py").resolve()),
+        benchmark_dir=str(Path(benchmark_path("rna_content_reference", "build.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "rna_content_ref",
+            log_path("slurm", "rna_content_ref.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.reference})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --gtf {input.gtf} \
+          --output {output.reference} \
+          > {log} 2>&1
+        """
+
+
+rule classify_rna_content:
+    input:
+        init=INIT_SENTINEL,
+        umi_ready_r1=results_path("umi", "ready", "r1", "{sample}.umi_ready.fastq.gz"),
+        star_input_r1=results_path("premap_snrna", "{sample}.snrna_unmapped.1.fastq.gz"),
+        rrna_bam=results_path("premap_rrna", "{sample}.rrna.bam"),
+        snrna_bam=results_path("premap_snrna", "{sample}.snrna.bam"),
+        star_bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
+        reference=RNA_CONTENT_REFERENCE
+    output:
+        tsv=results_path("qc", "rna_content", "{sample}.rna_content.tsv")
+    log:
+        log_path("qc_rna_content", "{sample}.log")
+    benchmark:
+        benchmark_path("qc_rna_content", "{sample}.tsv")
+    threads: config["resources"]["rna_content_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "classify_rna_content.py").resolve()),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_rna_content", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "m_medium",
+            "24G",
+            "rna_content",
+            log_path("slurm", f"rna_content.{wildcards.sample}.%A.log"),
+            config["resources"]["rna_content_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.tsv})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --umi-ready-r1 {input.umi_ready_r1} \
+          --star-input-r1 {input.star_input_r1} \
+          --rrna-bam {input.rrna_bam} \
+          --snrna-bam {input.snrna_bam} \
+          --star-bam {input.star_bam} \
+          --reference-cache {input.reference} \
+          --threads {threads} \
+          --output {output.tsv} \
+          > {log} 2>&1
+        """
+
+
+rule deduplicate_bam:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam"),
+        bai=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam.bai")
+    output:
+        bam=results_path("dedup", "{sample}.dedup.bam")
+    log:
+        log_path("dedup", "{sample}.log")
+    benchmark:
+        benchmark_path("dedup", "{sample}.tsv")
+    threads: config["resources"]["dedup_sort_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        temp_dir=results_path("tmp", "umi_dedup", "{sample}"),
+        sort_memory=config["dedup"]["samtools_sort_memory"],
+        method=config["dedup"]["method"],
+        multimap_tag=config["dedup"]["multimapping_detection_method"],
+        extra=config["dedup"].get("extra", ""),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("dedup", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "64G",
+            "umi_dedup",
+            log_path("slurm", f"umi_dedup.{wildcards.sample}.%A.log"),
+            config["resources"]["dedup_sort_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bam})" "{params.temp_dir}" "$(dirname {log})" "{params.benchmark_dir}"
+        umi_tools dedup \
+          --stdin={input.bam} \
+          --log={log} \
+          --temp-dir={params.temp_dir} \
+          --method={params.method} \
+          --paired \
+          --multimapping-detection-method={params.multimap_tag} \
+          --spliced-is-unique \
+          --unmapped-reads=discard \
+          --no-sort-output \
+          {params.extra} \
+        | samtools sort \
+            -@ {threads} \
+            -m {params.sort_memory} \
+            -o {output.bam} \
+            -
+        """
+
+
+rule index_star_bam:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam")
+    output:
+        bai=results_path("star", "{sample}.Aligned.sortedByCoord.out.bam.bai")
+    log:
+        log_path("star_index", "{sample}.log")
+    benchmark:
+        benchmark_path("star_index", "{sample}.tsv")
+    threads: config["resources"]["samtools_index_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("star_index", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "star_bai",
+            log_path("slurm", f"star_bai.{wildcards.sample}.%A.log"),
+            config["resources"]["samtools_index_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "{params.benchmark_dir}"
+        samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
+        """
+
+
+rule index_deduplicated_bam:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("dedup", "{sample}.dedup.bam")
+    output:
+        bai=results_path("dedup", "{sample}.dedup.bam.bai")
+    log:
+        log_path("dedup_index", "{sample}.log")
+    benchmark:
+        benchmark_path("dedup_index", "{sample}.tsv")
+    threads: config["resources"]["samtools_index_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("dedup_index", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bam_index",
+            log_path("slurm", f"bam_index.{wildcards.sample}.%A.log"),
+            config["resources"]["samtools_index_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.bai})" "$(dirname {log})" "{params.benchmark_dir}"
+        samtools index -@ {threads} {input.bam} {output.bai} > {log} 2>&1
+        """
+
+
+rule build_premrna_reference:
+    input:
+        init=INIT_SENTINEL,
+        gtf=PREMRNA_GTF
+    output:
+        reference=PREMRNA_REFERENCE
+    log:
+        log_path("premrna_reference", "build.log")
+    benchmark:
+        benchmark_path("premrna_reference", "build.tsv")
+    threads: config["resources"]["premrna_reference_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "build_premrna_reference.py").resolve()),
+        benchmark_dir=str(Path(benchmark_path("premrna_reference", "build.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "premrna_ref",
+            log_path("slurm", "premrna_ref.%A.log"),
+            config["resources"]["premrna_reference_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.reference})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --gtf {input.gtf} \
+          --output {output.reference} \
+          > {log} 2>&1
+        """
+
+
+rule quantify_premrna_mrna:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("dedup", "{sample}.dedup.bam"),
+        bai=results_path("dedup", "{sample}.dedup.bam.bai"),
+        reference=PREMRNA_REFERENCE
+    output:
+        gene_counts=PREMRNA_SAMPLE_GENE_COUNTS,
+        coverage=PREMRNA_SAMPLE_COVERAGE,
+        summary=PREMRNA_SAMPLE_SUMMARY
+    log:
+        log_path("premrna_quantify", "{sample}.log")
+    benchmark:
+        benchmark_path("premrna_quantify", "{sample}.tsv")
+    threads: config["resources"]["premrna_quant_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "quantify_premrna_mrna.py").resolve()),
+        condition=lambda wildcards: sample_condition(wildcards.sample),
+        metaprofile_upstream=PREMRNA_CFG["metaprofile_upstream"],
+        metaprofile_downstream=PREMRNA_CFG["metaprofile_downstream"],
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("premrna_quantify", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "m_medium",
+            "24G",
+            "premrna_quant",
+            log_path("slurm", f"premrna_quant.{wildcards.sample}.%A.log"),
+            config["resources"]["premrna_quant_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.gene_counts})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --bam {input.bam} \
+          --reference {input.reference} \
+          --sample {wildcards.sample} \
+          --condition {params.condition} \
+          --threads {threads} \
+          --metaprofile-upstream {params.metaprofile_upstream} \
+          --metaprofile-downstream {params.metaprofile_downstream} \
+          --output-gene-counts {output.gene_counts} \
+          --output-coverage {output.coverage} \
+          --output-summary {output.summary} \
+          > {log} 2>&1
+        """
+
+
+rule aggregate_premrna_mrna:
+    input:
+        init=INIT_SENTINEL,
+        gene_counts=expand(PREMRNA_SAMPLE_GENE_COUNTS, sample=SAMPLES),
+        coverages=expand(PREMRNA_SAMPLE_COVERAGE, sample=SAMPLES),
+        summaries=expand(PREMRNA_SAMPLE_SUMMARY, sample=SAMPLES)
+    output:
+        metaprofile_by_sample=PREMRNA_COMBINED_METAPROFILE_BY_SAMPLE,
+        metaprofile_by_condition=PREMRNA_COMBINED_METAPROFILE_BY_CONDITION,
+        summary_by_sample=PREMRNA_COMBINED_SUMMARY_BY_SAMPLE,
+        summary_by_condition=PREMRNA_COMBINED_SUMMARY_BY_CONDITION,
+        shared_genes=PREMRNA_COMBINED_SHARED_GENES
+    log:
+        log_path("premrna_aggregate", "combined.log")
+    benchmark:
+        benchmark_path("premrna_aggregate", "combined.tsv")
+    threads: config["resources"]["premrna_aggregate_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "aggregate_premrna_mrna.py").resolve()),
+        gene_count_args=lambda wildcards, input: " ".join(
+            f"--gene-counts {shlex.quote(path)}" for path in input.gene_counts
+        ),
+        coverage_args=lambda wildcards, input: " ".join(
+            f"--coverage {shlex.quote(path)}" for path in input.coverages
+        ),
+        summary_args=lambda wildcards, input: " ".join(
+            f"--summary {shlex.quote(path)}" for path in input.summaries
+        ),
+        shared_min_total_reads=PREMRNA_CFG["shared_min_total_reads_all_samples"],
+        benchmark_dir=str(Path(benchmark_path("premrna_aggregate", "combined.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "premrna_agg",
+            log_path("slurm", "premrna_agg.%A.log"),
+            config["resources"]["premrna_aggregate_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.metaprofile_by_sample})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.gene_count_args} \
+          {params.coverage_args} \
+          {params.summary_args} \
+          --shared-min-total-reads {params.shared_min_total_reads} \
+          --output-metaprofile-by-sample {output.metaprofile_by_sample} \
+          --output-metaprofile-by-condition {output.metaprofile_by_condition} \
+          --output-summary-by-sample {output.summary_by_sample} \
+          --output-summary-by-condition {output.summary_by_condition} \
+          --output-shared-genes {output.shared_genes} \
+          > {log} 2>&1
+        """
+
+
+rule build_branchpoint_reference:
+    input:
+        init=INIT_SENTINEL,
+        gtf=BRANCHPOINT_GTF,
+        branchpoints=BRANCHPOINT_SCORE_FILE
+    output:
+        reference=BRANCHPOINT_REFERENCE
+    log:
+        log_path("branchpoints_reference", "build.log")
+    benchmark:
+        benchmark_path("branchpoints_reference", "build.tsv")
+    threads: config["resources"]["branchpoint_reference_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "build_branchpoint_reference.py").resolve()),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_reference", "build.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_medium",
+            "16G",
+            "bp_ref",
+            log_path("slurm", "bp_ref.%A.log"),
+            config["resources"]["branchpoint_reference_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.reference})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --gtf {input.gtf} \
+          --branchpoints {input.branchpoints} \
+          --output {output.reference} \
+          > {log} 2>&1
+        """
+
+
+rule quantify_branchpoint_ends:
+    input:
+        init=INIT_SENTINEL,
+        bam=results_path("dedup", "{sample}.dedup.bam"),
+        bai=results_path("dedup", "{sample}.dedup.bam.bai"),
+        reference=BRANCHPOINT_REFERENCE
+    output:
+        site_counts=BRANCHPOINT_SAMPLE_SITE_COUNTS,
+        offset_counts=BRANCHPOINT_SAMPLE_INTRON_OFFSETS,
+        three_prime_coverage=BRANCHPOINT_SAMPLE_THREE_PRIME_COVERAGE,
+        metaprofile=BRANCHPOINT_SAMPLE_METAPROFILE,
+        summary=BRANCHPOINT_SAMPLE_SUMMARY
+    log:
+        log_path("branchpoints_quantify", "{sample}.log")
+    benchmark:
+        benchmark_path("branchpoints_quantify", "{sample}.tsv")
+    threads: config["resources"]["branchpoint_quant_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "quantify_branchpoint_ends.py").resolve()),
+        condition=lambda wildcards: sample_condition(wildcards.sample),
+        anchor_window=BRANCHPOINT_CFG.get("anchor_window", 5),
+        anchor_upstream=BRANCHPOINT_CFG.get("anchor_upstream", BRANCHPOINT_CFG.get("anchor_window", 5)),
+        anchor_downstream=BRANCHPOINT_CFG.get("anchor_downstream", BRANCHPOINT_CFG.get("anchor_window", 5)),
+        profile_upstream=BRANCHPOINT_CFG["profile_upstream"],
+        profile_downstream=BRANCHPOINT_CFG["profile_downstream"],
+        three_prime_coverage_upstream=BRANCHPOINT_CFG.get(
+            "three_prime_coverage_upstream",
+            BRANCHPOINT_CFG["profile_upstream"],
+        ),
+        three_prime_coverage_downstream=BRANCHPOINT_CFG.get(
+            "three_prime_coverage_downstream",
+            BRANCHPOINT_CFG["profile_downstream"],
+        ),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("branchpoints_quantify", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "16G",
+            "bp_quant",
+            log_path("slurm", f"bp_quant.{wildcards.sample}.%A.log"),
+            config["resources"]["branchpoint_quant_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.site_counts})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --bam {input.bam} \
+          --reference {input.reference} \
+          --sample {wildcards.sample} \
+          --condition {params.condition} \
+          --anchor-window {params.anchor_window} \
+          --anchor-upstream {params.anchor_upstream} \
+          --anchor-downstream {params.anchor_downstream} \
+          --profile-upstream {params.profile_upstream} \
+          --profile-downstream {params.profile_downstream} \
+          --three-prime-coverage-upstream {params.three_prime_coverage_upstream} \
+          --three-prime-coverage-downstream {params.three_prime_coverage_downstream} \
+          --output-site-counts {output.site_counts} \
+          --output-offset-counts {output.offset_counts} \
+          --output-three-prime-coverage {output.three_prime_coverage} \
+          --output-metaprofile {output.metaprofile} \
+          --output-summary {output.summary} \
+          > {log} 2>&1
+        """
+
+
+rule aggregate_branchpoint_profiles:
+    input:
+        init=INIT_SENTINEL,
+        metaprofiles=expand(BRANCHPOINT_SAMPLE_METAPROFILE, sample=SAMPLES),
+        summaries=expand(BRANCHPOINT_SAMPLE_SUMMARY, sample=SAMPLES),
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES),
+        intron_offsets=expand(BRANCHPOINT_SAMPLE_INTRON_OFFSETS, sample=SAMPLES),
+        three_prime_coverages=expand(BRANCHPOINT_SAMPLE_THREE_PRIME_COVERAGE, sample=SAMPLES)
+    output:
+        metaprofile_by_sample=BRANCHPOINT_COMBINED_METAPROFILE_BY_SAMPLE,
+        metaprofile_by_condition=BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
+        summary_by_sample=BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
+        summary_by_condition=BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION,
+        shared_introns=BRANCHPOINT_COMBINED_SHARED_INTRONS,
+        three_prime_coverage_by_sample=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
+        three_prime_coverage_by_condition=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION
+    log:
+        log_path("branchpoints_aggregate", "combined.log")
+    benchmark:
+        benchmark_path("branchpoints_aggregate", "combined.tsv")
+    threads: config["resources"]["branchpoint_aggregate_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "aggregate_branchpoint_profiles.py").resolve()),
+        metaprofile_args=lambda wildcards, input: " ".join(
+            f"--metaprofile {shlex.quote(path)}" for path in input.metaprofiles
+        ),
+        summary_args=lambda wildcards, input: " ".join(
+            f"--summary {shlex.quote(path)}" for path in input.summaries
+        ),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        intron_offset_args=lambda wildcards, input: " ".join(
+            f"--intron-offsets {shlex.quote(path)}" for path in input.intron_offsets
+        ),
+        three_prime_coverage_args=lambda wildcards, input: " ".join(
+            f"--three-prime-coverage {shlex.quote(path)}" for path in input.three_prime_coverages
+        ),
+        shared_min_reads=BRANCHPOINT_CFG["shared_min_reads_all_samples"],
+        benchmark_dir=str(Path(benchmark_path("branchpoints_aggregate", "combined.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "bp_agg",
+            log_path("slurm", "bp_agg.%A.log"),
+            config["resources"]["branchpoint_aggregate_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.metaprofile_by_sample})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.metaprofile_args} \
+          {params.summary_args} \
+          {params.site_count_args} \
+          {params.intron_offset_args} \
+          {params.three_prime_coverage_args} \
+          --shared-min-reads {params.shared_min_reads} \
+          --output-metaprofile-by-sample {output.metaprofile_by_sample} \
+          --output-metaprofile-by-condition {output.metaprofile_by_condition} \
+          --output-summary-by-sample {output.summary_by_sample} \
+          --output-summary-by-condition {output.summary_by_condition} \
+          --output-shared-introns {output.shared_introns} \
+          --output-three-prime-coverage-by-sample {output.three_prime_coverage_by_sample} \
+          --output-three-prime-coverage-by-condition {output.three_prime_coverage_by_condition} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_branchpoint_anchored_percentile_overlap:
+    input:
+        init=INIT_SENTINEL,
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES)
+    output:
+        summary=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_SUMMARY,
+        intron_counts=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INTRONS
+    log:
+        log_path("branchpoints_anchored_percentile_overlap", "ils_dis.log")
+    benchmark:
+        benchmark_path("branchpoints_anchored_percentile_overlap", "ils_dis.tsv")
+    threads: config["resources"]["branchpoint_aggregate_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_anchored_percentile_overlap.py").resolve()),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        reference_condition=BRANCHPOINT_CFG.get("anchored_percentile_overlap_reference_condition", "ILS"),
+        query_condition=BRANCHPOINT_CFG.get("anchored_percentile_overlap_query_condition", "DIS"),
+        percentile_start=BRANCHPOINT_CFG.get("anchored_percentile_overlap_start", 1),
+        percentile_end=BRANCHPOINT_CFG.get("anchored_percentile_overlap_end", 99),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_anchored_percentile_overlap", "ils_dis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "bp_pct_overlap",
+            log_path("slurm", "bp_pct_overlap.%A.log"),
+            config["resources"]["branchpoint_aggregate_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.site_count_args} \
+          --reference-condition {params.reference_condition:q} \
+          --query-condition {params.query_condition:q} \
+          --percentile-start {params.percentile_start} \
+          --percentile-end {params.percentile_end} \
+          --output-summary {output.summary} \
+          --output-intron-counts {output.intron_counts} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_downstream_exon_branchpoint_profiles:
+    input:
+        init=INIT_SENTINEL,
+        reference=BRANCHPOINT_REFERENCE,
+        bams=expand(results_path("dedup", "{sample}.dedup.bam"), sample=SAMPLES),
+        bais=expand(results_path("dedup", "{sample}.dedup.bam.bai"), sample=SAMPLES)
+    output:
+        metaprofile_by_sample=BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_SAMPLE,
+        metaprofile_by_condition=BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION,
+        summary_by_sample=BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_SAMPLE,
+        summary_by_condition=BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_CONDITION
+    log:
+        log_path("branchpoints_downstream_exon", "analysis.log")
+    benchmark:
+        benchmark_path("branchpoints_downstream_exon", "analysis.tsv")
+    threads: config["resources"].get("branchpoint_aggregate_threads", 1)
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_downstream_exon_branchpoint_profiles.py").resolve()),
+        sample_bam_args=lambda wildcards: " ".join(
+            "--sample-bam "
+            f"{shlex.quote(sample)} "
+            f"{shlex.quote(sample_condition(sample))} "
+            f"{shlex.quote(results_path('dedup', f'{sample}.dedup.bam'))}"
+            for sample in SAMPLES
+        ),
+        downstream_exon_min_offset=BRANCHPOINT_CFG.get("downstream_exon_min_offset", 5),
+        profile_upstream=BRANCHPOINT_CFG["profile_upstream"],
+        profile_downstream=BRANCHPOINT_CFG["profile_downstream"],
+        benchmark_dir=str(Path(benchmark_path("branchpoints_downstream_exon", "analysis.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_medium",
+            "16G",
+            "bp_exon_prof",
+            log_path("slurm", "bp_exon_prof.%A.log"),
+            config["resources"].get("branchpoint_aggregate_threads", 1),
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.metaprofile_by_sample})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --reference {input.reference} \
+          {params.sample_bam_args} \
+          --downstream-exon-min-offset {params.downstream_exon_min_offset} \
+          --profile-upstream {params.profile_upstream} \
+          --profile-downstream {params.profile_downstream} \
+          --output-metaprofile-by-sample {output.metaprofile_by_sample} \
+          --output-metaprofile-by-condition {output.metaprofile_by_condition} \
+          --output-summary-by-sample {output.summary_by_sample} \
+          --output-summary-by-condition {output.summary_by_condition} \
+          > {log} 2>&1
+        """
+
+
+rule analyze_branchpoint_anchored_percentile_overlap_inverse:
+    input:
+        init=INIT_SENTINEL,
+        site_counts=expand(BRANCHPOINT_SAMPLE_SITE_COUNTS, sample=SAMPLES)
+    output:
+        summary=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY,
+        intron_counts=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_INTRONS
+    log:
+        log_path("branchpoints_anchored_percentile_overlap", "dis_ils.log")
+    benchmark:
+        benchmark_path("branchpoints_anchored_percentile_overlap", "dis_ils.tsv")
+    threads: config["resources"]["branchpoint_aggregate_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "analyze_anchored_percentile_overlap.py").resolve()),
+        site_count_args=lambda wildcards, input: " ".join(
+            f"--site-counts {shlex.quote(path)}" for path in input.site_counts
+        ),
+        reference_condition=BRANCHPOINT_CFG.get("anchored_percentile_overlap_query_condition", "DIS"),
+        query_condition=BRANCHPOINT_CFG.get("anchored_percentile_overlap_reference_condition", "ILS"),
+        percentile_start=BRANCHPOINT_CFG.get("anchored_percentile_overlap_start", 1),
+        percentile_end=BRANCHPOINT_CFG.get("anchored_percentile_overlap_end", 99),
+        benchmark_dir=str(Path(benchmark_path("branchpoints_anchored_percentile_overlap", "dis_ils.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "bp_pct_overlap_inv",
+            log_path("slurm", "bp_pct_overlap_inv.%A.log"),
+            config["resources"]["branchpoint_aggregate_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          {params.site_count_args} \
+          --reference-condition {params.reference_condition:q} \
+          --query-condition {params.query_condition:q} \
+          --percentile-start {params.percentile_start} \
+          --percentile-end {params.percentile_end} \
+          --output-summary {output.summary} \
+          --output-intron-counts {output.intron_counts} \
+          > {log} 2>&1
+        """
+
+
+rule plot_branchpoint_metaprofiles:
+    input:
+        metaprofile=BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
+        three_prime_coverage=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION
+    output:
+        pdf=PLOT_COMBINED_METAPROFILE_PANEL
+    log:
+        log_path("r_plots", "branchpoint_metaprofiles.log")
+    benchmark:
+        benchmark_path("r_plots", "branchpoint_metaprofiles.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((R_SCRIPTS_DIR / "plot_metaprofiles.R").resolve()),
+        benchmark_dir=str(Path(benchmark_path("r_plots", "branchpoint_metaprofiles.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "r_bp_meta",
+            log_path("slurm", "r_bp_meta.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.pdf})" "$(dirname {log})" "{params.benchmark_dir}"
+        Rscript {params.script} \
+          --branchpoint-metaprofile {input.metaprofile} \
+          --splice-site-metaprofile {input.three_prime_coverage} \
+          --output {output.pdf} \
+          > {log} 2>&1
+        """
+
+
+rule plot_proportion_reads_stop_at_branchpoint:
+    input:
+        summary=BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE
+    output:
+        pdf=PLOT_PROPORTION_READS_STOP_AT_BP
+    log:
+        log_path("r_plots", "proportion_reads_stop_at_branchpoint.log")
+    benchmark:
+        benchmark_path("r_plots", "proportion_reads_stop_at_branchpoint.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((R_SCRIPTS_DIR / "plot_prop_bp.R").resolve()),
+        benchmark_dir=str(Path(benchmark_path("r_plots", "proportion_reads_stop_at_branchpoint.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "r_bp_prop",
+            log_path("slurm", "r_bp_prop.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.pdf})" "$(dirname {log})" "{params.benchmark_dir}"
+        Rscript {params.script} \
+          --summary {input.summary} \
+          --output {output.pdf} \
+          > {log} 2>&1
+        """
+
+
+rule plot_downstream_exon_branchpoint_metaprofile:
+    input:
+        metaprofile=BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION
+    output:
+        pdf=PLOT_DOWNSTREAM_EXON_BRANCHPOINT_METAPROFILE
+    log:
+        log_path("r_plots", "downstream_exon_branchpoint_metaprofile.log")
+    benchmark:
+        benchmark_path("r_plots", "downstream_exon_branchpoint_metaprofile.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((R_SCRIPTS_DIR / "plot_dis_reads_from_downstream_intron.R").resolve()),
+        benchmark_dir=str(Path(benchmark_path("r_plots", "downstream_exon_branchpoint_metaprofile.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "r_bp_down_exon",
+            log_path("slurm", "r_bp_down_exon.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.pdf})" "$(dirname {log})" "{params.benchmark_dir}"
+        Rscript {params.script} \
+          --metaprofile {input.metaprofile} \
+          --output {output.pdf} \
+          > {log} 2>&1
+        """
+
+
+rule plot_premrna_mrna:
+    input:
+        metaprofile=PREMRNA_COMBINED_METAPROFILE_BY_CONDITION,
+        summary=PREMRNA_COMBINED_SUMMARY_BY_SAMPLE
+    output:
+        pdf=PLOT_PROPORTION_EXONIC
+    log:
+        log_path("r_plots", "premrna_mrna.log")
+    benchmark:
+        benchmark_path("r_plots", "premrna_mrna.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((R_SCRIPTS_DIR / "plot_prop_mrna.R").resolve()),
+        benchmark_dir=str(Path(benchmark_path("r_plots", "premrna_mrna.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "r_mrna_prop",
+            log_path("slurm", "r_mrna_prop.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.pdf})" "$(dirname {log})" "{params.benchmark_dir}"
+        Rscript {params.script} \
+          --metaprofile {input.metaprofile} \
+          --summary {input.summary} \
+          --output {output.pdf} \
+          > {log} 2>&1
+        """
+
+
+rule plot_percentile_intron_overlap:
+    input:
+        ils_dis=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_SUMMARY,
+        dis_ils=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY
+    output:
+        ils_dis=PLOT_PERCENTILE_ILS_DIS,
+        dis_ils=PLOT_PERCENTILE_DIS_ILS,
+        pie=PLOT_ILS_DIS_PIE
+    log:
+        log_path("r_plots", "percentile_intron_overlap.log")
+    benchmark:
+        benchmark_path("r_plots", "percentile_intron_overlap.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((R_SCRIPTS_DIR / "plot_proportion_intron_overlap.R").resolve()),
+        benchmark_dir=str(Path(benchmark_path("r_plots", "percentile_intron_overlap.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "r_pct_overlap",
+            log_path("slurm", "r_pct_overlap.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.ils_dis})" "$(dirname {log})" "{params.benchmark_dir}"
+        Rscript {params.script} \
+          --ils-dis-summary {input.ils_dis} \
+          --dis-ils-summary {input.dis_ils} \
+          --output-ils-dis {output.ils_dis} \
+          --output-dis-ils {output.dis_ils} \
+          --output-pie {output.pie} \
+          > {log} 2>&1
+        """
+
+
+rule plot_example_gene_browser:
+    input:
+        shared_genes=PREMRNA_COMBINED_SHARED_GENES,
+        sample_summary=PREMRNA_COMBINED_SUMMARY_BY_SAMPLE,
+        branchpoint_reference=BRANCHPOINT_REFERENCE,
+        bams=expand(results_path("dedup", "{sample}.dedup.bam"), sample=SAMPLES),
+        bais=expand(results_path("dedup", "{sample}.dedup.bam.bai"), sample=SAMPLES)
+    output:
+        pdf=PLOT_EXAMPLE_GENE_BROWSER_PDF,
+        png=PLOT_EXAMPLE_GENE_BROWSER_PNG,
+        coverage_only=PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY,
+        reads_only=PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY
+    log:
+        log_path("r_plots", "example_gene_browser.log")
+    benchmark:
+        benchmark_path("r_plots", "example_gene_browser.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((R_SCRIPTS_DIR / "plot_example_gene_browser.R").resolve()),
+        gtf=PREMRNA_GTF,
+        dedup_dir=lambda wildcards, input: str(Path(input.bams[0]).parent),
+        output_stem=lambda wildcards, output: str(Path(output.pdf).with_suffix("")),
+        region="chr12:54282250-54282820",
+        gene="HNRNPA1",
+        benchmark_dir=str(Path(benchmark_path("r_plots", "example_gene_browser.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "16G",
+            "r_gene_browser",
+            log_path("slurm", "r_gene_browser.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.pdf})" "$(dirname {log})" "{params.benchmark_dir}"
+        Rscript {params.script} \
+          --shared-genes {input.shared_genes} \
+          --sample-summary {input.sample_summary} \
+          --branchpoint-reference {input.branchpoint_reference} \
+          --dedup-dir {params.dedup_dir} \
+          --gtf {params.gtf} \
+          --gene {params.gene} \
+          --region {params.region} \
+          --output-stem {params.output_stem} \
+          > {log} 2>&1
+        """
+
+
+rule bam_qc:
+    input:
+        init=INIT_SENTINEL,
+        bam=lambda wildcards: BAM_QC_STAGES[wildcards.stage].format(sample=wildcards.sample)
+    output:
+        flagstat=results_path("qc", "bam", "{stage}", "{sample}.flagstat.txt"),
+        stats=results_path("qc", "bam", "{stage}", "{sample}.stats.txt")
+    log:
+        log_path("qc_bam", "{stage}.{sample}.log")
+    benchmark:
+        benchmark_path("qc_bam", "{stage}.{sample}.tsv")
+    threads: config["resources"]["bam_qc_threads"]
+    wildcard_constraints:
+        stage="premap_rrna|premap_snrna|star|dedup"
+    conda:
+        str(ENV_YAML)
+    params:
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("qc_bam", f"{wildcards.stage}.{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_short",
+            "8G",
+            f"bam_qc_{wildcards.stage}",
+            log_path("slurm", f"bam_qc.{wildcards.stage}.{wildcards.sample}.%A.log"),
+            config["resources"]["bam_qc_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.flagstat})" "$(dirname {log})" "{params.benchmark_dir}"
+        samtools flagstat -@ {threads} {input.bam} > {output.flagstat}
+        samtools stats -@ {threads} {input.bam} > {output.stats}
+        """

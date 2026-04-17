@@ -6,17 +6,7 @@ import gzip
 from collections import defaultdict
 from pathlib import Path
 
-import matplotlib
 import numpy as np
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
-
-CONDITION_COLORS = {
-    "ILS": "#1f77b4",
-    "DIS": "#d95f02",
-}
 
 METADATA_FIELDS = [
     "gene_id",
@@ -51,8 +41,6 @@ def parse_args():
     parser.add_argument("--percentile-end", type=int, default=99)
     parser.add_argument("--output-summary", required=True)
     parser.add_argument("--output-intron-counts", required=True)
-    parser.add_argument("--output-plot-png", required=True)
-    parser.add_argument("--output-plot-pdf", required=True)
     return parser.parse_args()
 
 
@@ -211,63 +199,6 @@ def build_percentile_rows(
     return rows
 
 
-def plot_percentile_summary(rows, reference_condition, query_condition, output_png, output_pdf):
-    Path(output_png).parent.mkdir(parents=True, exist_ok=True)
-    Path(output_pdf).parent.mkdir(parents=True, exist_ok=True)
-    x_values = [int(row["reference_percentile_cutoff"]) for row in rows]
-    y_values = [float(row["query_covered_percent"]) for row in rows]
-    random_thinning_values = [float(row["random_thinning_expected_covered_percent"]) for row in rows]
-    random_thinning_fraction = float(rows[0]["random_thinning_fraction"])
-    query_to_reference_depth_ratio = float(rows[0]["query_to_reference_anchored_fragment_ratio"])
-    include_depth_model = query_to_reference_depth_ratio <= 1.0
-
-    fig, axis = plt.subplots(figsize=(7.2, 4.8))
-    color = CONDITION_COLORS.get(query_condition, "#4c4c4c")
-    axis.plot(x_values, y_values, color=color, linewidth=2.5, label=f"Observed {query_condition}")
-    axis.scatter(x_values, y_values, color=color, s=14, linewidths=0)
-    if include_depth_model:
-        axis.plot(
-            x_values,
-            random_thinning_values,
-            color="#4c4c4c",
-            linewidth=2.2,
-            linestyle="--",
-            label=f"{reference_condition} downsampled to {query_condition} depth",
-        )
-    axis.set_xlim(min(x_values), max(x_values))
-    axis.set_ylim(0, 100)
-    axis.set_xlabel(f"{reference_condition} anchored-count percentile cutoff")
-    axis.set_ylabel(f"{query_condition} introns with anchored coverage (%)")
-    axis.set_title(f"{query_condition} coverage of {reference_condition}-anchored introns")
-    axis.grid(axis="y", color="#d9d9d9", linewidth=0.8)
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    axis.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=False, fontsize=9)
-
-    annotation = f"Pooled counts; {query_condition} covered: >=1 anchored fragment in any replicate"
-    if include_depth_model:
-        annotation = (
-            f"{annotation}\n"
-            f"Downsampling q={random_thinning_fraction:.4f} "
-            f"({query_condition}/{reference_condition} anchored fragments)"
-        )
-    axis.text(
-        0.02,
-        0.04,
-        annotation,
-        transform=axis.transAxes,
-        ha="left",
-        va="bottom",
-        fontsize=9,
-        color="#333333",
-    )
-
-    fig.tight_layout()
-    fig.savefig(output_png, dpi=300, bbox_inches="tight")
-    fig.savefig(output_pdf, bbox_inches="tight")
-    plt.close(fig)
-
-
 def main():
     args = parse_args()
     condition_counts, condition_sample_counts, condition_samples, metadata = read_site_counts(args.site_counts)
@@ -335,13 +266,6 @@ def main():
 
     write_rows(args.output_intron_counts, intron_rows, intron_fieldnames)
     write_rows(args.output_summary, percentile_rows, summary_fieldnames)
-    plot_percentile_summary(
-        percentile_rows,
-        args.reference_condition,
-        args.query_condition,
-        args.output_plot_png,
-        args.output_plot_pdf,
-    )
 
     print(f"Reference condition: {args.reference_condition}")
     print(f"Query condition: {args.query_condition}")

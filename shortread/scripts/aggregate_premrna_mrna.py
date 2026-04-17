@@ -8,17 +8,6 @@ import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
-
-CONDITION_COLORS = {
-    "ILS": "#1f77b4",
-    "DIS": "#d95f02",
-}
-
 T_CRITICAL_95_BY_DF = {
     1: 12.706,
     2: 4.303,
@@ -58,18 +47,12 @@ def parse_args():
     parser.add_argument("--gene-counts", action="append", dest="gene_counts", required=True)
     parser.add_argument("--coverage", action="append", dest="coverages", required=True)
     parser.add_argument("--summary", action="append", dest="summaries", required=True)
-    parser.add_argument("--plot-upstream", type=int, required=True)
-    parser.add_argument("--plot-downstream", type=int, required=True)
     parser.add_argument("--shared-min-total-reads", type=int, required=True)
     parser.add_argument("--output-metaprofile-by-sample", required=True)
     parser.add_argument("--output-metaprofile-by-condition", required=True)
     parser.add_argument("--output-summary-by-sample", required=True)
     parser.add_argument("--output-summary-by-condition", required=True)
     parser.add_argument("--output-shared-genes", required=True)
-    parser.add_argument("--output-summary-plot-png", required=True)
-    parser.add_argument("--output-summary-plot-pdf", required=True)
-    parser.add_argument("--output-metaprofile-plot-png", required=True)
-    parser.add_argument("--output-metaprofile-plot-pdf", required=True)
     return parser.parse_args()
 
 
@@ -385,111 +368,6 @@ def build_sample_summary_row(raw_summary_row, gene_counts, shared_genes, shared_
     return summary_row
 
 
-def plot_metaprofile_figure(
-    condition_rows,
-    condition_order,
-    shared_min_total_reads,
-    plot_upstream,
-    plot_downstream,
-    output_png,
-    output_pdf,
-):
-    profile_by_condition = defaultdict(list)
-    for row in condition_rows:
-        profile_by_condition[row["condition"]].append(row)
-
-    figure, axis = plt.subplots(1, 1, figsize=(8.5, 4.5), constrained_layout=True)
-    visible_y_max = 0.0
-    for condition in condition_order:
-        ordered_rows = sorted(profile_by_condition[condition], key=lambda row: int(row["offset_nt"]))
-        color = CONDITION_COLORS.get(condition, "#4c4c4c")
-        x_values = [int(row["offset_nt"]) for row in ordered_rows]
-        y_values = [float(row["mean_coverage_percent_gene_reads"]) for row in ordered_rows]
-        ci95_values = [float(row["ci95_coverage_percent_gene_reads"]) for row in ordered_rows]
-        lower = [max(y - ci95, 0.0) for y, ci95 in zip(y_values, ci95_values)]
-        upper = [y + ci95 for y, ci95 in zip(y_values, ci95_values)]
-        visible_y_max = max(visible_y_max, max(upper, default=0.0))
-        axis.fill_between(x_values, lower, upper, color=color, alpha=0.16, linewidth=0)
-        axis.plot(x_values, y_values, color=color, linewidth=3.25, label=condition)
-
-    axis.axvline(0, color="#4c4c4c", linestyle="--", linewidth=1)
-    axis.set_xlim(-plot_upstream, plot_downstream)
-    axis.set_ylim(0.0, 1.0 if visible_y_max == 0 else visible_y_max * 1.08)
-    axis.set_xlabel("Offset from MANE transcript 3' end (nt; + downstream)")
-    axis.set_ylabel("Exonic coverage (% of shared-gene fragments)")
-    axis.set_title(
-        "Exonic read coverage around MANE transcript 3' ends"
-        f"\nShared genes with >= {shared_min_total_reads} total reads in every sample"
-    )
-    axis.legend(frameon=False)
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-
-    figure.savefig(output_png, dpi=300)
-    figure.savefig(output_pdf)
-    plt.close(figure)
-
-
-def plot_summary_metrics_figure(
-    sample_summary_rows,
-    condition_summary_rows,
-    condition_order,
-    shared_min_total_reads,
-    output_png,
-    output_pdf,
-):
-    metrics = [
-        ("intronic_to_mrna_ratio", "Intronic / mRNA fragments"),
-        ("intronic_percent_gene_reads", "Intronic gene reads (%)"),
-        ("mrna_percent_gene_reads", "mRNA gene reads (%)"),
-    ]
-
-    summary_by_condition = {row["condition"]: row for row in condition_summary_rows}
-    sample_rows_by_condition = defaultdict(list)
-    for row in sample_summary_rows:
-        sample_rows_by_condition[row["condition"]].append(row)
-
-    figure, axes = plt.subplots(1, len(metrics), figsize=(11.5, 4.5), constrained_layout=True)
-    if len(metrics) == 1:
-        axes = [axes]
-
-    figure.suptitle(
-        "Shared MANE-gene pre-mRNA versus mRNA summary"
-        f"\nGenes retained at >= {shared_min_total_reads} total reads in every sample"
-    )
-
-    for axis, (field, title) in zip(axes, metrics):
-        for idx, condition in enumerate(condition_order):
-            color = CONDITION_COLORS.get(condition, "#4c4c4c")
-            values = [parse_optional_float(row.get(field)) for row in sample_rows_by_condition[condition]]
-            values = [value for value in values if value is not None]
-            if values:
-                if len(values) == 1:
-                    jitter = [idx]
-                else:
-                    step = 0.24 / (len(values) - 1)
-                    jitter = [idx - 0.12 + step * value_index for value_index in range(len(values))]
-                axis.scatter(jitter, values, color=color, s=36, zorder=3)
-
-            condition_row = summary_by_condition[condition]
-            mean_value = parse_optional_float(condition_row.get(f"mean_{field}"))
-            ci95_value = parse_optional_float(condition_row.get(f"ci95_{field}"))
-            if mean_value is not None:
-                axis.hlines(mean_value, idx - 0.18, idx + 0.18, color=color, linewidth=2.5)
-                if ci95_value is not None and ci95_value > 0:
-                    axis.vlines(idx, mean_value - ci95_value, mean_value + ci95_value, color=color, linewidth=1.5)
-
-        axis.set_xticks(range(len(condition_order)))
-        axis.set_xticklabels(condition_order)
-        axis.set_title(title)
-        axis.spines["top"].set_visible(False)
-        axis.spines["right"].set_visible(False)
-
-    figure.savefig(output_png, dpi=300)
-    figure.savefig(output_pdf)
-    plt.close(figure)
-
-
 def main():
     args = parse_args()
 
@@ -605,24 +483,6 @@ def main():
         list(condition_summary_rows[0].keys()),
     )
     write_rows(args.output_shared_genes, shared_gene_rows, shared_gene_fieldnames)
-
-    plot_summary_metrics_figure(
-        sample_summary_rows,
-        condition_summary_rows,
-        condition_order,
-        args.shared_min_total_reads,
-        args.output_summary_plot_png,
-        args.output_summary_plot_pdf,
-    )
-    plot_metaprofile_figure(
-        condition_metaprofile_rows,
-        condition_order,
-        args.shared_min_total_reads,
-        args.plot_upstream,
-        args.plot_downstream,
-        args.output_metaprofile_plot_png,
-        args.output_metaprofile_plot_pdf,
-    )
 
 
 if __name__ == "__main__":

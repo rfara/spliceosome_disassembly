@@ -1,8 +1,38 @@
 rm(list = ls())
 
 library(tidyverse)
+library(patchwork)
 
-bp_meta <- read_tsv("snake/results/branchpoints/downstream_exon/metaprofile.by_condition.tsv") %>%
+cli_args <- commandArgs(trailingOnly = TRUE)
+
+get_cli_arg <- function(name, default = NULL) {
+  inline_prefix <- paste0("--", name, "=")
+  inline_value <- cli_args[str_starts(cli_args, fixed(inline_prefix))]
+  if (length(inline_value) > 0) {
+    return(str_remove(inline_value[[length(inline_value)]], fixed(inline_prefix)))
+  }
+
+  flag_index <- match(paste0("--", name), cli_args)
+  if (!is.na(flag_index) && flag_index < length(cli_args)) {
+    return(cli_args[[flag_index + 1]])
+  }
+
+  default
+}
+
+required_arg <- function(name) {
+  value <- get_cli_arg(name)
+  if (is.null(value) || !nzchar(value)) {
+    stop("Missing required argument --", name)
+  }
+  value
+}
+
+metaprofile_path <- required_arg("metaprofile")
+output_path <- required_arg("output")
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+bp_meta <- read_tsv(metaprofile_path) %>%
   filter(condition == "DIS")
 
 ggplot(bp_meta, aes(x = offset_nt, color = condition, fill = condition)) +
@@ -72,4 +102,4 @@ bp_feature_plot <- ggplot() +
 bp_panel <- (bp_meta_plot / bp_feature_plot) +
   plot_layout(heights = c(10, 1))
 
-ggsave("plots/dis_metaprofile_from_downstream_exon.pdf", bp_panel, width = 6, height = 2.5)
+ggsave(output_path, bp_panel, width = 6, height = 2.5)

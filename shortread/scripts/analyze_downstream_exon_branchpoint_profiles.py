@@ -8,10 +8,6 @@ import statistics
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import pysam
 
 
@@ -63,24 +59,16 @@ def parse_args():
     parser.add_argument("--downstream-exon-min-offset", type=int, default=5)
     parser.add_argument("--profile-upstream", type=int, required=True)
     parser.add_argument("--profile-downstream", type=int, required=True)
-    parser.add_argument("--plot-upstream", type=int, default=50)
-    parser.add_argument("--plot-downstream", type=int, default=10)
     parser.add_argument("--output-metaprofile-by-sample", required=True)
     parser.add_argument("--output-metaprofile-by-condition", required=True)
     parser.add_argument("--output-summary-by-sample", required=True)
     parser.add_argument("--output-summary-by-condition", required=True)
-    parser.add_argument("--output-coverage-plot-png", required=True)
-    parser.add_argument("--output-coverage-plot-pdf", required=True)
-    parser.add_argument("--output-five-prime-plot-png", required=True)
-    parser.add_argument("--output-five-prime-plot-pdf", required=True)
     args = parser.parse_args()
 
     if args.downstream_exon_min_offset < 1:
         parser.error("--downstream-exon-min-offset must be positive")
     if args.profile_upstream < 0 or args.profile_downstream < 0:
         parser.error("Profile upstream/downstream values must be non-negative")
-    if args.plot_upstream < 0 or args.plot_downstream < 0:
-        parser.error("Plot upstream/downstream values must be non-negative")
 
     return args
 
@@ -484,65 +472,6 @@ def condition_order_from_samples(sample_bams):
     return order
 
 
-def plot_profile(
-    condition_rows,
-    condition_order,
-    plot_upstream,
-    plot_downstream,
-    value_field,
-    ci_field,
-    ylabel,
-    title,
-    output_png,
-    output_pdf,
-):
-    rows_by_condition = defaultdict(list)
-    for row in condition_rows:
-        offset = int(row["offset_nt"])
-        if -plot_upstream <= offset <= plot_downstream:
-            rows_by_condition[row["condition"]].append(row)
-
-    colors = {
-        "ILS": "#111111",
-        "DIS": "#D33B76",
-    }
-    fallback_colors = ["#111111", "#D33B76", "#2B8CBE", "#41AB5D"]
-
-    figure, axis = plt.subplots(1, 1, figsize=(7.2, 4.8), constrained_layout=True)
-    for index, condition in enumerate(condition_order):
-        rows = sorted(rows_by_condition[condition], key=lambda row: int(row["offset_nt"]))
-        if not rows:
-            continue
-        x_values = [int(row["offset_nt"]) for row in rows]
-        y_values = [float(row[value_field]) for row in rows]
-        ci_values = [float(row[ci_field]) for row in rows]
-        lower = [max(0.0, y - ci) for y, ci in zip(y_values, ci_values)]
-        upper = [y + ci for y, ci in zip(y_values, ci_values)]
-        color = colors.get(condition, fallback_colors[index % len(fallback_colors)])
-        axis.plot(x_values, y_values, color=color, linewidth=2.2, label=condition)
-        axis.fill_between(x_values, lower, upper, color=color, alpha=0.2, linewidth=0)
-
-    axis.axvline(0, color="#444444", linestyle="--", linewidth=1.0)
-    axis.set_xlim(-plot_upstream, plot_downstream)
-    visible_values = [
-        float(row[value_field])
-        for rows in rows_by_condition.values()
-        for row in rows
-        if -plot_upstream <= int(row["offset_nt"]) <= plot_downstream
-    ]
-    visible_y_max = max(visible_values) if visible_values else 0.0
-    axis.set_ylim(0.0, 1.0 if visible_y_max == 0 else visible_y_max * 1.08)
-    axis.set_xlabel("Offset from selected branchpoint (nt; + toward/downstream of the intron 3' end)")
-    axis.set_ylabel(ylabel)
-    axis.set_title(title)
-    axis.legend(frameon=False)
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    figure.savefig(output_png, dpi=300)
-    figure.savefig(output_pdf)
-    plt.close(figure)
-
-
 def main():
     args = parse_args()
     introns, intron_interval_index = load_reference(args.reference)
@@ -590,35 +519,6 @@ def main():
     write_rows(args.output_summary_by_condition, condition_summary_rows, list(condition_summary_rows[0].keys()))
     write_rows(args.output_metaprofile_by_sample, sample_profile_rows, list(sample_profile_rows[0].keys()))
     write_rows(args.output_metaprofile_by_condition, condition_profile_rows, list(condition_profile_rows[0].keys()))
-
-    title_suffix = (
-        "Fragments with read1 5' end inside intron and RNA 3' end "
-        f">= +{args.downstream_exon_min_offset} nt downstream of the 3'SS"
-    )
-    plot_profile(
-        condition_profile_rows,
-        condition_order,
-        args.plot_upstream,
-        args.plot_downstream,
-        "mean_coverage_percent",
-        "ci95_coverage_percent",
-        "Downstream-exon-spanning fragment coverage (%)",
-        f"Branchpoint-centred coverage from downstream-exon-spanning fragments\n{title_suffix}",
-        args.output_coverage_plot_png,
-        args.output_coverage_plot_pdf,
-    )
-    plot_profile(
-        condition_profile_rows,
-        condition_order,
-        args.plot_upstream,
-        args.plot_downstream,
-        "mean_read_start_percent",
-        "ci95_read_start_percent",
-        "Read1 5' ends (% of downstream-exon-spanning fragments)",
-        f"Branchpoint-centred 5' end metaprofile from downstream-exon-spanning fragments\n{title_suffix}",
-        args.output_five_prime_plot_png,
-        args.output_five_prime_plot_pdf,
-    )
 
     print(f"Samples analysed: {len(sample_summary_rows)}")
     print(f"Metaprofile rows written: {len(sample_profile_rows)}")

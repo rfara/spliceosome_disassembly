@@ -62,70 +62,9 @@ branchpoint_analysis:
   downstream_exon_min_offset: 5
   profile_upstream: 100
   profile_downstream: 100
-  plot_upstream: 50
-  plot_downstream: 10
-  canonical_branchpoint_motif: YUNAY
   three_prime_coverage_upstream: 100
   three_prime_coverage_downstream: 100
   shared_min_reads_all_samples: 5
-  shared_anchored_enrichment_control_condition: ILS
-  shared_anchored_enrichment_query_condition: DIS
-  shared_anchored_enrichment_denominator_scope: shared
-  shared_anchored_enrichment_min_log2_fold_change: null
-  shared_anchored_enrichment_max_log2_fold_change: null
-  readthrough_profile_upstream: 100
-  readthrough_profile_downstream: 100
-  readthrough_shared_min_reads_all_samples: 5
-  readthrough_plot_upstream: 40
-  readthrough_plot_downstream: 10
-  readthrough_blacklist_min_samples: 2
-  readthrough_blacklist_min_traversing_fragments: 20
-  readthrough_blacklist_deletion_percent_threshold: 0.5
-  readthrough_blacklist_insertion_percent_threshold: 0.5
-  readthrough_max_total_indel_percent_any_sample: 0.5
-  readthrough_blacklist_single_offset_min_samples: 2
-  readthrough_blacklist_single_offset_min_coverage: 20
-  readthrough_blacklist_single_offset_deletion_percent_threshold: 10.0
-  readthrough_blacklist_single_offset_insertion_percent_threshold: 10.0
-  heterogeneity_signal_field: zero_or_plus_one_branchpoint_fragments
-  heterogeneity_query_condition: DIS
-  heterogeneity_control_condition: ILS
-  heterogeneity_sample_min_reads: 10
-  heterogeneity_condition_min_reads: 20
-  heterogeneity_bootstraps: 500
-  heterogeneity_seed: 1
-  sequence_context_genome_fasta: /Users/rupert.faraway/bio/reference/hs/fa/GRCh38.primary_assembly.genome.fa # Falls back to references.genome_fasta if unavailable. Can also be a YAML list of candidate paths.
-  sequence_context_signal_field: zero_or_plus_one_branchpoint_fragments
-  sequence_context_control_condition: ILS
-  sequence_context_query_condition: DIS
-  sequence_context_control_min_reads: 20
-  sequence_context_query_min_reads: 20
-  sequence_context_bp_upstream: 5
-  sequence_context_bp_downstream: 5
-  sequence_context_five_prime_intron_bases: 6
-  sequence_context_decile_fraction: 0.1
-  sequence_context_require_bp_center_base: A
-  relative_feature_genome_fasta: /Users/rupert.faraway/bio/reference/hs/fa/GRCh38.primary_assembly.genome.fa # Falls back to sequence_context_genome_fasta then references.genome_fasta if unavailable. Can also be a YAML list of candidate paths.
-  relative_feature_signal_field: zero_or_plus_one_branchpoint_fragments
-  relative_feature_control_condition: ILS
-  relative_feature_query_condition: DIS
-  relative_feature_control_min_reads: 20
-  relative_feature_query_min_reads: 20
-  relative_feature_require_bp_center_base: A
-  relative_feature_bp_upstream: 5
-  relative_feature_bp_downstream: 5
-  relative_feature_intron_gc_window: 100
-  relative_feature_three_prime_window: 20
-  relative_feature_residual_quantile_fraction: 0.1
-  relative_feature_logo_bp_upstream: 10
-  relative_feature_logo_bp_downstream: 10
-  relative_feature_logo_five_prime_upstream: 5
-  relative_feature_logo_five_prime_downstream: 10
-  relative_feature_logo_three_prime_upstream: 20
-  relative_feature_logo_three_prime_downstream: 3
-  query_branch_group_threshold: 0.25
-  query_branch_group_reference_residual_quantile_fraction: 0.1
-  control_enriched_quantile_fraction: 0.1
 
 premrna_analysis:
   mane_gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz
@@ -150,15 +89,9 @@ resources:
   fastqc_threads: 2
   bam_qc_threads: 2
   rna_content_threads: 4
-  snrna_count_threads: 2
   premrna_reference_threads: 1
   premrna_quant_threads: 2
   premrna_aggregate_threads: 1
   branchpoint_reference_threads: 1
   branchpoint_quant_threads: 1
   branchpoint_aggregate_threads: 1
-  branchpoint_readthrough_quant_threads: 1
-  branchpoint_readthrough_aggregate_threads: 1
-  branchpoint_heterogeneity_threads: 1
-  branchpoint_sequence_context_threads: 1
-  branchpoint_relative_feature_threads: 1

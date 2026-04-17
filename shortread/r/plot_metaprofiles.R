@@ -3,15 +3,42 @@ rm(list = ls())
 library(tidyverse)
 library(patchwork)
 
-setwd("/Users/rupert.faraway/Documents/GitHub/spliceosome_disassembly/shortread/")
+cli_args <- commandArgs(trailingOnly = TRUE)
 
+get_cli_arg <- function(name, default = NULL) {
+  inline_prefix <- paste0("--", name, "=")
+  inline_value <- cli_args[str_starts(cli_args, fixed(inline_prefix))]
+  if (length(inline_value) > 0) {
+    return(str_remove(inline_value[[length(inline_value)]], fixed(inline_prefix)))
+  }
+
+  flag_index <- match(paste0("--", name), cli_args)
+  if (!is.na(flag_index) && flag_index < length(cli_args)) {
+    return(cli_args[[flag_index + 1]])
+  }
+
+  default
+}
+
+required_arg <- function(name) {
+  value <- get_cli_arg(name)
+  if (is.null(value) || !nzchar(value)) {
+    stop("Missing required argument --", name)
+  }
+  value
+}
+
+branchpoint_metaprofile_path <- required_arg("branchpoint-metaprofile")
+splice_site_metaprofile_path <- required_arg("splice-site-metaprofile")
+output_path <- required_arg("output")
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
 
 # Load --------------------------------------------------------------------
 
-bp_meta <- read_tsv("snake/results/branchpoints/combined/anchored_enrichment_cutoff_sweep/none/metaprofile.by_condition.tsv") %>%
+bp_meta <- read_tsv(branchpoint_metaprofile_path) %>%
   mutate(condition = condition %>% fct_relevel("DIS"))
 
-ss_meta <- read_tsv("snake/results/branchpoints/combined/anchored_enrichment_cutoff_sweep/none/three_prime_coverage.by_condition.tsv") %>%
+ss_meta <- read_tsv(splice_site_metaprofile_path) %>%
   mutate(condition = condition %>% fct_relevel("DIS"))
 
 # Plot --------------------------------------------------------------------
@@ -58,9 +85,6 @@ ggplot(ss_meta, aes(x = offset_nt, color = condition, fill = condition)) +
   scale_color_manual(values = c("#D33B76", "black")) +
   scale_fill_manual(values = c("#D33B76", "black")) ->
   ss_meta_plot
-
-(bp_meta_plot | ss_meta_plot) + plot_layout(widths = c(5, 2))
-
 
 bp_feature_rects <- tibble(
   feature = "intron",
@@ -147,5 +171,4 @@ ss_panel <- (ss_meta_plot / ss_feature_plot) +
   plot_layout(widths = c(5, 2)) ->
   combined_metaprofile_panel
 
-ggsave("plots/combined_metaprofile_panel.pdf", combined_metaprofile_panel, width = 8, height = 2.5)
-
+ggsave(output_path, combined_metaprofile_panel, width = 8, height = 2.5)

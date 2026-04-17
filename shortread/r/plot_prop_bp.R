@@ -2,7 +2,36 @@ rm(list = ls())
 
 library(tidyverse)
 
-bp_reads <- read_tsv("snake/results/branchpoints/combined/no_filtering/summary.by_sample.tsv") %>%
+cli_args <- commandArgs(trailingOnly = TRUE)
+
+get_cli_arg <- function(name, default = NULL) {
+  inline_prefix <- paste0("--", name, "=")
+  inline_value <- cli_args[str_starts(cli_args, fixed(inline_prefix))]
+  if (length(inline_value) > 0) {
+    return(str_remove(inline_value[[length(inline_value)]], fixed(inline_prefix)))
+  }
+
+  flag_index <- match(paste0("--", name), cli_args)
+  if (!is.na(flag_index) && flag_index < length(cli_args)) {
+    return(cli_args[[flag_index + 1]])
+  }
+
+  default
+}
+
+required_arg <- function(name) {
+  value <- get_cli_arg(name)
+  if (is.null(value) || !nzchar(value)) {
+    stop("Missing required argument --", name)
+  }
+  value
+}
+
+summary_path <- required_arg("summary")
+output_path <- required_arg("output")
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+bp_reads <- read_tsv(summary_path) %>%
   mutate(condition = fct_relevel(condition, "ILS"))
 
 
@@ -34,6 +63,5 @@ ggplot(bp_reads, aes(x = condition, color = condition, y = zero_or_plus_one_bran
   scale_fill_manual(values = rev(c("#D33B76", "black"))) ->
   barplot_proportion
 
-ggsave("plots/proportion_reads_stop_at_bp.pdf", barplot_proportion, width = 3, height = 3)
-
+ggsave(output_path, barplot_proportion, width = 3, height = 3)
 

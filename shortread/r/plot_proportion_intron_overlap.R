@@ -2,8 +2,40 @@ rm(list = ls())
 
 library(tidyverse)
 
-dis_ils <- read_tsv("snake/results/branchpoints/combined/anchored_percentile_overlap/dis_ils_percentile_summary.tsv")
-ils_dis <- read_tsv("snake/results/branchpoints/combined/anchored_percentile_overlap/percentile_summary.tsv")
+cli_args <- commandArgs(trailingOnly = TRUE)
+
+get_cli_arg <- function(name, default = NULL) {
+  inline_prefix <- paste0("--", name, "=")
+  inline_value <- cli_args[str_starts(cli_args, fixed(inline_prefix))]
+  if (length(inline_value) > 0) {
+    return(str_remove(inline_value[[length(inline_value)]], fixed(inline_prefix)))
+  }
+
+  flag_index <- match(paste0("--", name), cli_args)
+  if (!is.na(flag_index) && flag_index < length(cli_args)) {
+    return(cli_args[[flag_index + 1]])
+  }
+
+  default
+}
+
+required_arg <- function(name) {
+  value <- get_cli_arg(name)
+  if (is.null(value) || !nzchar(value)) {
+    stop("Missing required argument --", name)
+  }
+  value
+}
+
+ils_dis_summary_path <- required_arg("ils-dis-summary")
+dis_ils_summary_path <- required_arg("dis-ils-summary")
+output_ils_dis_path <- required_arg("output-ils-dis")
+output_dis_ils_path <- required_arg("output-dis-ils")
+output_pie_path <- required_arg("output-pie")
+dir.create(dirname(output_ils_dis_path), recursive = TRUE, showWarnings = FALSE)
+
+dis_ils <- read_tsv(dis_ils_summary_path)
+ils_dis <- read_tsv(ils_dis_summary_path)
 
 ggplot(ils_dis,
        aes(x = reference_percentile_cutoff, y = query_covered_percent)) +
@@ -29,8 +61,8 @@ ggplot(dis_ils,
        y = "percent of intron with ILS reads") ->
   percentile_dis_ils
 
-ggsave("plots/percentile_ils_dis.pdf", percentile_ils_dis, width = 3, height = 3)
-ggsave("plots/percentile_dis_ils.pdf", percentile_dis_ils, width = 3, height = 3)
+ggsave(output_ils_dis_path, percentile_ils_dis, width = 3, height = 3)
+ggsave(output_dis_ils_path, percentile_dis_ils, width = 3, height = 3)
 
 ils_dis %>%
   filter(reference_percentile_cutoff == 50) %>%
@@ -53,5 +85,5 @@ ggplot(pie_chart_df, aes(x = "", y = value, fill = name)) +
         plot.title = element_text(hjust = 0.5)) ->
   ils_dis_pie
 
-ggsave("plots/ils_dis_pie.pdf", ils_dis_pie, width = 3, height = 3)
+ggsave(output_pie_path, ils_dis_pie, width = 3, height = 3)
             

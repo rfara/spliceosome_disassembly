@@ -3,7 +3,37 @@ rm(list = ls())
 library(tidyverse)
 library(patchwork)
 
-condition_meta <- read_tsv("snake/results/premrna/combined/three_prime_exonic_coverage.by_condition.tsv")
+cli_args <- commandArgs(trailingOnly = TRUE)
+
+get_cli_arg <- function(name, default = NULL) {
+  inline_prefix <- paste0("--", name, "=")
+  inline_value <- cli_args[str_starts(cli_args, fixed(inline_prefix))]
+  if (length(inline_value) > 0) {
+    return(str_remove(inline_value[[length(inline_value)]], fixed(inline_prefix)))
+  }
+
+  flag_index <- match(paste0("--", name), cli_args)
+  if (!is.na(flag_index) && flag_index < length(cli_args)) {
+    return(cli_args[[flag_index + 1]])
+  }
+
+  default
+}
+
+required_arg <- function(name) {
+  value <- get_cli_arg(name)
+  if (is.null(value) || !nzchar(value)) {
+    stop("Missing required argument --", name)
+  }
+  value
+}
+
+metaprofile_path <- required_arg("metaprofile")
+summary_path <- required_arg("summary")
+output_path <- required_arg("output")
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+condition_meta <- read_tsv(metaprofile_path)
 
 ggplot(condition_meta, aes(x = offset_nt, color = condition, fill = condition)) +
   geom_line(aes(y = mean_coverage_percent_gene_reads)) +
@@ -27,7 +57,7 @@ ggplot(condition_meta, aes(x = offset_nt, color = condition, fill = condition)) 
   scale_fill_manual(values = c("black", "#D33B76"), breaks = c("ILS", "DIS")) ->
   metaprofile_3end
 
-summary_df <- read_tsv("snake/results/premrna/combined/summary.by_sample.tsv") %>%
+summary_df <- read_tsv(summary_path) %>%
   mutate(condition = fct_relevel(condition, "ILS"))
 
 t.test(summary_df$mrna_percent_gene_reads ~ summary_df$condition) ->
@@ -64,5 +94,4 @@ ggplot(summary_df,
   plot_layout(widths = c(3, 1)) ->
   combined_plot
 
-ggsave("plots/proportion_exonic_combined_plot.pdf", combined_plot, width = 7, height = 2.5)
-
+ggsave(output_path, combined_plot, width = 7, height = 2.5)

@@ -17,49 +17,50 @@ condition_levels <- c("DIS", "ILS")
 condition_colours <- c(DIS = "#D33B76", ILS = "black")
 unique_alignment_expression <- "([NH] == 1 || (![NH] && mapq > 0)) && cigar !~ \"N\""
 
-# cli_args <- commandArgs(trailingOnly = TRUE)
-# 
-# get_cli_arg <- function(name, default = NULL) {
-#   inline_prefix <- paste0("--", name, "=")
-#   inline_value <- cli_args[str_starts(cli_args, fixed(inline_prefix))]
-#   if (length(inline_value) > 0) {
-#     return(str_remove(inline_value[[length(inline_value)]], fixed(inline_prefix)))
-#   }
-# 
-#   flag_index <- match(paste0("--", name), cli_args)
-#   if (!is.na(flag_index) && flag_index < length(cli_args)) {
-#     return(cli_args[[flag_index + 1]])
-#   }
-# 
-#   default
-# }
-# 
-# as_optional_string <- function(value) {
-#   if (is.null(value) || length(value) == 0) {
-#     return(NULL)
-#   }
-#   if (length(value) > 1) {
-#     return(value)
-#   }
-#   if (is.na(value) || !nzchar(value)) {
-#     return(NULL)
-#   }
-#   if (tolower(value) %in% c("null", "none", "na")) {
-#     return(NULL)
-#   }
-#   value
-# }
-# 
-# example_gene_name <- as_optional_string(get_cli_arg("gene", example_gene_name))
-# example_region <- as_optional_string(get_cli_arg("region", example_region))
-# annotation_gene_names <- as_optional_string(get_cli_arg("annotation-genes", annotation_gene_names))
-# if (!is.null(annotation_gene_names)) {
-#   annotation_gene_names <- str_split(annotation_gene_names, ",", simplify = TRUE) %>%
-#     as.character() %>%
-#     str_trim() %>%
-#     discard(~ .x == "")
-# }
-# max_reads_per_condition <- as.integer(get_cli_arg("max-reads", max_reads_per_condition))
+cli_args <- commandArgs(trailingOnly = TRUE)
+
+get_cli_arg <- function(name, default = NULL) {
+  inline_prefix <- paste0("--", name, "=")
+  inline_value <- cli_args[str_starts(cli_args, fixed(inline_prefix))]
+  if (length(inline_value) > 0) {
+    return(str_remove(inline_value[[length(inline_value)]], fixed(inline_prefix)))
+  }
+
+  flag_index <- match(paste0("--", name), cli_args)
+  if (!is.na(flag_index) && flag_index < length(cli_args)) {
+    return(cli_args[[flag_index + 1]])
+  }
+
+  default
+}
+
+as_optional_string <- function(value) {
+  if (is.null(value) || length(value) == 0) {
+    return(NULL)
+  }
+  if (length(value) > 1) {
+    return(value)
+  }
+  if (is.na(value) || !nzchar(value)) {
+    return(NULL)
+  }
+  if (tolower(value) %in% c("null", "none", "na")) {
+    return(NULL)
+  }
+  value
+}
+
+example_gene_name <- as_optional_string(get_cli_arg("gene", example_gene_name))
+example_region <- as_optional_string(get_cli_arg("region", example_region))
+annotation_gene_names <- as_optional_string(get_cli_arg("annotation-genes", annotation_gene_names))
+if (!is.null(annotation_gene_names)) {
+  annotation_gene_names <- str_split(annotation_gene_names, ",", simplify = TRUE) %>%
+    as.character() %>%
+    str_trim() %>%
+    discard(~ .x == "")
+}
+max_reads_per_condition <- as.integer(get_cli_arg("max-reads", max_reads_per_condition))
+random_seed <- as.integer(get_cli_arg("seed", random_seed))
 
 
 # Paths -------------------------------------------------------------------
@@ -82,7 +83,7 @@ find_shortread_dir <- function() {
   candidates <- unique(normalizePath(candidates[!is.na(candidates)], mustWork = FALSE))
   for (candidate in candidates) {
     if (
-      dir.exists(file.path(candidate, "snake", "results")) &&
+      dir.exists(file.path(candidate, "results")) &&
         dir.exists(file.path(candidate, "r"))
     ) {
       return(candidate)
@@ -95,8 +96,7 @@ find_shortread_dir <- function() {
 find_samtools <- function() {
   candidates <- c(
     Sys.getenv("SAMTOOLS", unset = NA_character_),
-    unname(Sys.which("samtools")),
-    "/Users/rupert.faraway/miniconda3/envs/spliceosome-shortread/bin/samtools"
+    unname(Sys.which("samtools"))
   )
   candidates <- unique(candidates[!is.na(candidates) & nzchar(candidates)])
   candidates <- candidates[file.exists(candidates)]
@@ -109,17 +109,34 @@ find_samtools <- function() {
 }
 
 shortread_dir <- find_shortread_dir()
-setwd(shortread_dir)
 
-samtools <- find_samtools()
+samtools <- get_cli_arg("samtools", find_samtools())
 
-gtf_path <- "../annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz"
-shared_genes_path <- "snake/results/premrna/combined/shared_genes.tsv"
-sample_summary_path <- "snake/results/premrna/combined/summary.by_sample.tsv"
-branchpoint_reference_path <- "snake/results/branchpoints/reference/mane_select_top_branchpoints.tsv"
-dedup_dir <- "snake/results/dedup"
-
-dir.create("plots", showWarnings = FALSE)
+gtf_path <- get_cli_arg(
+  "gtf",
+  file.path(shortread_dir, "..", "annotation", "gencode.v44.primary_assembly.basic.annotation.gtf.gz")
+)
+shared_genes_path <- get_cli_arg(
+  "shared-genes",
+  file.path(shortread_dir, "results", "processed_data", "premrna_mrna", "combined", "shared_genes.tsv")
+)
+sample_summary_path <- get_cli_arg(
+  "sample-summary",
+  file.path(shortread_dir, "results", "processed_data", "premrna_mrna", "combined", "summary.by_sample.tsv")
+)
+branchpoint_reference_path <- get_cli_arg(
+  "branchpoint-reference",
+  file.path(
+    shortread_dir,
+    "results",
+    "processed_data",
+    "branchpoint_metaprofiles",
+    "reference",
+    "mane_select_top_branchpoints.tsv"
+  )
+)
+dedup_dir <- get_cli_arg("dedup-dir", file.path(shortread_dir, "results", "dedup"))
+output_stem_arg <- as_optional_string(get_cli_arg("output-stem", NULL))
 
 
 # Helpers -----------------------------------------------------------------
@@ -864,7 +881,12 @@ plot_id <- if (is.null(example_region)) {
   sanitize_plot_id(plot_region$label)
 }
 
-output_stem <- file.path("plots", paste0("example_gene_browser_", plot_id))
+output_stem <- if (is.null(output_stem_arg)) {
+  file.path(shortread_dir, "results", "plots", paste0("example_gene_browser_", plot_id))
+} else {
+  output_stem_arg
+}
+dir.create(dirname(output_stem), recursive = TRUE, showWarnings = FALSE)
 
 ggsave(paste0(output_stem, ".pdf"), example_gene_plot, width = 9, height = 5)
 ggsave(paste0(output_stem, ".png"), example_gene_plot, width = 9, height = 5, dpi = 300)
