@@ -56,6 +56,12 @@ RRNA_INDEX_PREFIX = results_path("reference", "rrna", "rrna")
 SNRNA_INDEX_PREFIX = results_path("reference", "snrna", "snrna")
 STAR_INDEX_DIR = results_path("reference", "star_genome")
 SLURM_TIME_LIMITS = config["slurm"]["time_limits"]
+GENOME_FASTA = repo_path(config["references"]["genome_fasta"])
+GENOME_GTF = repo_path(config["references"]["genome_gtf"])
+STAR_GENOME_GTF_NAME = Path(GENOME_GTF).name
+if STAR_GENOME_GTF_NAME.endswith(".gz"):
+    STAR_GENOME_GTF_NAME = STAR_GENOME_GTF_NAME[:-3]
+STAR_GENOME_GTF = results_path("reference", "genome", STAR_GENOME_GTF_NAME)
 BRANCHPOINT_GTF = repo_path(BRANCHPOINT_CFG["mane_gtf"])
 PREMRNA_GTF = repo_path(PREMRNA_CFG.get("mane_gtf", BRANCHPOINT_CFG["mane_gtf"]))
 BRANCHPOINT_SCORE_FILE = repo_path(BRANCHPOINT_CFG["branchpoints"])
@@ -332,6 +338,7 @@ STAR_GENOME_GENERATE_EXTRA = star_genome_generate_extra()
 STAR_ALIGN_EXTRA = star_align_extra()
 INIT_SENTINEL = results_path(".workflow_dirs_initialized")
 WORKFLOW_DIRS = [
+    results_path("reference", "genome"),
     results_path("reference", "rrna"),
     results_path("reference", "snrna"),
     results_path("reference", "star_genome"),
@@ -565,11 +572,84 @@ rule build_snrna_index:
         """
 
 
+rule download_genome_fasta:
+    input:
+        init=INIT_SENTINEL
+    output:
+        fasta=GENOME_FASTA
+    log:
+        log_path("reference", "genome_fasta_download.log")
+    benchmark:
+        benchmark_path("reference", "genome_fasta_download.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "download_reference.py").resolve()),
+        url=config["references"]["genome_fasta_url"],
+        compressed_md5=config["references"].get("genome_fasta_md5", ""),
+        benchmark_dir=str(Path(benchmark_path("reference", "genome_fasta_download.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "8G",
+            "genome_fa",
+            log_path("slurm", "genome_fasta.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.fasta})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --url {params.url:q} \
+          --compressed-md5 {params.compressed_md5:q} \
+          --decompress-gzip \
+          --output {output.fasta:q} \
+          > {log} 2>&1
+        """
+
+
+rule prepare_star_gtf:
+    input:
+        init=INIT_SENTINEL,
+        gtf=GENOME_GTF
+    output:
+        gtf=STAR_GENOME_GTF
+    log:
+        log_path("reference", "star_gtf_prepare.log")
+    benchmark:
+        benchmark_path("reference", "star_gtf_prepare.tsv")
+    threads: 1
+    conda:
+        str(ENV_YAML)
+    params:
+        benchmark_dir=str(Path(benchmark_path("reference", "star_gtf_prepare.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "star_gtf",
+            log_path("slurm", "star_gtf.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.gtf})" "$(dirname {log})" "{params.benchmark_dir}"
+        tmp="{output.gtf}.tmp"
+        if [[ "{input.gtf}" == *.gz ]]; then
+          gzip -dc {input.gtf:q} > "$tmp"
+        else
+          cp {input.gtf:q} "$tmp"
+        fi
+        mv "$tmp" {output.gtf:q}
+        """
+
+
 rule build_star_index:
     input:
         init=INIT_SENTINEL,
-        fasta=repo_path(config["references"]["genome_fasta"]),
-        gtf=repo_path(config["references"]["genome_gtf"])
+        fasta=GENOME_FASTA,
+        gtf=STAR_GENOME_GTF
     output:
         directory(STAR_INDEX_DIR)
     log:

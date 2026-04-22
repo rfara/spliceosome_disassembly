@@ -8,6 +8,10 @@ dependencies:
   - conda=26.1.1
   - snakemake=8.30
   - snakemake-executor-plugin-cluster-generic
+  - r-base=4.4
+  - r-tidyverse=2.0
+  - r-patchwork=1.3
+  - r-data.table=1.16
   - cutadapt=4.9
   - fastqc=0.12.1
   - umi_tools=1.1.5

@@ -36,6 +36,10 @@ snakemake -s shortread/Snakefile --cores 16 --use-conda
 
 The main sequencing parameter to check before a first run is `star.sjdb_overhang` in `shortread/config.yaml`; it should be read length minus one.
 
+The workflow uses the rDNA FASTA, snRNA FASTA, GENCODE v44 primary-assembly GTF, and branchpoint table bundled under `annotation/`. The GRCh38 primary-assembly genome FASTA is downloaded by Snakemake from GENCODE release 44 and verified with the recorded MD5 checksum before STAR indexing.
+
+Raw FASTQs are not bundled. Until public read accessions are available, place them at the paths listed under `samples` in `shortread/config.yaml`, or update those sample paths before running.
+
 ## Running On The Cluster
 
 Submit the Snakemake controller job:

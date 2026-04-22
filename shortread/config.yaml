@@ -7,10 +7,12 @@ samples:
   DIS_3: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373589/373589_S6_R1_001.fastq.gz
 
 references:
-  rrna_fasta: /groups/plaschka/rupert.faraway/reference/hs/rdna/rdna.fa
-  snrna_fasta: /groups/plaschka/rupert.faraway/reference/hs/snrna/gc44.basic.snrna.fa
-  genome_fasta: /groups/plaschka/rupert.faraway/reference/hs/fa/GRCh38.primary_assembly.genome.fa
-  genome_gtf: /groups/plaschka/rupert.faraway/reference/hs/annotation/gencode.v44.primary_assembly.basic.annotation.gtf
+  rrna_fasta: annotation/rdna.fa
+  snrna_fasta: annotation/gc44.basic.snrna.fa
+  genome_fasta: shortread/results/reference/genome/GRCh38.primary_assembly.genome.fa
+  genome_fasta_url: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/GRCh38.primary_assembly.genome.fa.gz
+  genome_fasta_md5: 9c3fc2ca260a767530dddb0f26721a6b
+  genome_gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz
 
 trim:
   min_length_r1: 30
