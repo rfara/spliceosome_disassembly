@@ -137,6 +137,7 @@ branchpoint_reference_path <- get_cli_arg(
 )
 dedup_dir <- get_cli_arg("dedup-dir", file.path(shortread_dir, "results", "dedup"))
 output_stem_arg <- as_optional_string(get_cli_arg("output-stem", NULL))
+stats_output_path <- as_optional_string(get_cli_arg("stats-output", NULL))
 
 
 # Helpers -----------------------------------------------------------------
@@ -887,6 +888,23 @@ output_stem <- if (is.null(output_stem_arg)) {
   output_stem_arg
 }
 dir.create(dirname(output_stem), recursive = TRUE, showWarnings = FALSE)
+
+if (!is.null(stats_output_path)) {
+  dir.create(dirname(stats_output_path), recursive = TRUE, showWarnings = FALSE)
+  tibble(
+    region = plot_region$label,
+    requested_gene = if (is.null(example_gene_name)) NA_character_ else example_gene_name,
+    annotated_shared_genes = nrow(annotation_genes),
+    branchpoint_annotations = nrow(branchpoints),
+    candidate_read_alignments = nrow(read_rects),
+    drawn_distinct_reads = n_distinct(paste(subsampled$reads$sample, subsampled$reads$read_name)),
+    packed_read_rows = sum(subsampled$lanes$row_count),
+    max_reads_per_condition = max_reads_per_condition,
+    random_seed = random_seed
+  ) %>%
+    write_tsv(stats_output_path)
+  message("Wrote ", stats_output_path)
+}
 
 ggsave(paste0(output_stem, ".pdf"), example_gene_plot, width = 9, height = 5)
 ggsave(paste0(output_stem, ".png"), example_gene_plot, width = 9, height = 5, dpi = 300)

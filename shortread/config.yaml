@@ -66,7 +66,7 @@ branchpoint_analysis:
   profile_downstream: 100
   three_prime_coverage_upstream: 100
   three_prime_coverage_downstream: 100
-  shared_min_reads_all_samples: 5
+  min_anchored_reads_all_samples_for_analysis_inclusion: 0
 
 premrna_analysis:
   mane_gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz

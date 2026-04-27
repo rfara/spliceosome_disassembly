@@ -19,6 +19,7 @@ This directory contains the Snakemake workflow for processing spliceosome disass
 - `anchored_percentile_overlap/`
 
 `results/plots` contains the final R-generated figures.
+It also contains `plot_analysis_counts.tsv`, which summarizes the read and feature counts used for each plot.
 
 ## Running Locally
 
@@ -56,7 +57,7 @@ The workflow keeps the analyses that feed the final R plots:
 
 - deduplicated genome BAMs and BAM/QC summaries
 - pre-mRNA/mRNA summary and 3' end metaprofiles
-- branchpoint-centred metaprofiles using the unfiltered shared intron set
+- branchpoint-centred and 3'SS-centred metaprofiles on one intron set included in analysis
 - branchpoint metaprofiles for reads extending into the downstream exon
 - anchored percentile overlap summaries
 - final R plots in `results/plots`

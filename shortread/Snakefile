@@ -130,8 +130,8 @@ BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE = results_path(
 BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION = results_path(
     "processed_data", "branchpoint_metaprofiles", "combined", "summary.by_condition.tsv"
 )
-BRANCHPOINT_COMBINED_SHARED_INTRONS = results_path(
-    "processed_data", "branchpoint_metaprofiles", "combined", "shared_introns.tsv"
+BRANCHPOINT_COMBINED_ANALYSIS_INTRONS = results_path(
+    "processed_data", "branchpoint_metaprofiles", "combined", "introns_included_in_analysis.tsv"
 )
 BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE = results_path(
     "processed_data",
@@ -194,12 +194,18 @@ PLOT_PERCENTILE_DIS_ILS = plot_path("percentile_dis_ils.pdf")
 PLOT_ILS_DIS_PIE = plot_path("ils_dis_pie.pdf")
 PLOT_EXAMPLE_GENE_BROWSER_PDF = plot_path("example_gene_browser_chr12_54282250_54282820.pdf")
 PLOT_EXAMPLE_GENE_BROWSER_PNG = plot_path("example_gene_browser_chr12_54282250_54282820.png")
+PLOT_EXAMPLE_GENE_BROWSER_STATS = plot_path(
+    "example_gene_browser_chr12_54282250_54282820.analysis_counts.tsv"
+)
 PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY = plot_path(
     "example_gene_browser_chr12_54282250_54282820.coverage_only.pdf"
 )
 PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY = plot_path(
     "example_gene_browser_chr12_54282250_54282820.reads_only.pdf"
 )
+PLOT_ANALYSIS_COUNTS = plot_path("plot_analysis_counts.tsv")
+EXAMPLE_GENE_BROWSER_REGION = "chr12:54282250-54282820"
+EXAMPLE_GENE_BROWSER_GENE = "HNRNPA1"
 RNA_CONTENT_REFERENCE = results_path("reference", "rna_content", "annotation.pkl")
 BAM_QC_STAGES = {
     "premap_rrna": results_path("premap_rrna", "{sample}.rrna.bam"),
@@ -467,7 +473,7 @@ rule all:
         BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
         BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
         BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION,
-        BRANCHPOINT_COMBINED_SHARED_INTRONS,
+        BRANCHPOINT_COMBINED_ANALYSIS_INTRONS,
         BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
         BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
         BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_SAMPLE,
@@ -487,8 +493,10 @@ rule all:
         PLOT_ILS_DIS_PIE,
         PLOT_EXAMPLE_GENE_BROWSER_PDF,
         PLOT_EXAMPLE_GENE_BROWSER_PNG,
+        PLOT_EXAMPLE_GENE_BROWSER_STATS,
         PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY,
         PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY,
+        PLOT_ANALYSIS_COUNTS,
 
 
 rule initialize_workdirs:
@@ -1599,7 +1607,7 @@ rule aggregate_branchpoint_profiles:
         metaprofile_by_condition=BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
         summary_by_sample=BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
         summary_by_condition=BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION,
-        shared_introns=BRANCHPOINT_COMBINED_SHARED_INTRONS,
+        analysis_introns=BRANCHPOINT_COMBINED_ANALYSIS_INTRONS,
         three_prime_coverage_by_sample=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
         three_prime_coverage_by_condition=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION
     log:
@@ -1626,7 +1634,7 @@ rule aggregate_branchpoint_profiles:
         three_prime_coverage_args=lambda wildcards, input: " ".join(
             f"--three-prime-coverage {shlex.quote(path)}" for path in input.three_prime_coverages
         ),
-        shared_min_reads=BRANCHPOINT_CFG["shared_min_reads_all_samples"],
+        analysis_min_reads=BRANCHPOINT_CFG["min_anchored_reads_all_samples_for_analysis_inclusion"],
         benchmark_dir=str(Path(benchmark_path("branchpoints_aggregate", "combined.tsv")).parent),
         cluster=slurm_cluster_args(
             "c_short",
@@ -1645,12 +1653,12 @@ rule aggregate_branchpoint_profiles:
           {params.site_count_args} \
           {params.intron_offset_args} \
           {params.three_prime_coverage_args} \
-          --shared-min-reads {params.shared_min_reads} \
+          --analysis-min-reads {params.analysis_min_reads} \
           --output-metaprofile-by-sample {output.metaprofile_by_sample} \
           --output-metaprofile-by-condition {output.metaprofile_by_condition} \
           --output-summary-by-sample {output.summary_by_sample} \
           --output-summary-by-condition {output.summary_by_condition} \
-          --output-shared-introns {output.shared_introns} \
+          --output-analysis-introns {output.analysis_introns} \
           --output-three-prime-coverage-by-sample {output.three_prime_coverage_by_sample} \
           --output-three-prime-coverage-by-condition {output.three_prime_coverage_by_condition} \
           > {log} 2>&1
@@ -1987,6 +1995,7 @@ rule plot_example_gene_browser:
     output:
         pdf=PLOT_EXAMPLE_GENE_BROWSER_PDF,
         png=PLOT_EXAMPLE_GENE_BROWSER_PNG,
+        stats=PLOT_EXAMPLE_GENE_BROWSER_STATS,
         coverage_only=PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY,
         reads_only=PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY
     log:
@@ -2000,8 +2009,8 @@ rule plot_example_gene_browser:
         gtf=PREMRNA_GTF,
         dedup_dir=lambda wildcards, input: str(Path(input.bams[0]).parent),
         output_stem=lambda wildcards, output: str(Path(output.pdf).with_suffix("")),
-        region="chr12:54282250-54282820",
-        gene="HNRNPA1",
+        region=EXAMPLE_GENE_BROWSER_REGION,
+        gene=EXAMPLE_GENE_BROWSER_GENE,
         benchmark_dir=str(Path(benchmark_path("r_plots", "example_gene_browser.tsv")).parent),
         cluster=slurm_cluster_args(
             "c_short",
@@ -2022,7 +2031,75 @@ rule plot_example_gene_browser:
           --gtf {params.gtf} \
           --gene {params.gene} \
           --region {params.region} \
+          --stats-output {output.stats} \
           --output-stem {params.output_stem} \
+          > {log} 2>&1
+        """
+
+
+rule summarize_plot_analysis_counts:
+    input:
+        branchpoint_summary=BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
+        branchpoint_three_prime=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
+        downstream_summary=BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_SAMPLE,
+        premrna_summary=PREMRNA_COMBINED_SUMMARY_BY_SAMPLE,
+        percentile_ils_dis=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_SUMMARY,
+        percentile_dis_ils=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY,
+        example_browser_stats=PLOT_EXAMPLE_GENE_BROWSER_STATS,
+    output:
+        summary=PLOT_ANALYSIS_COUNTS
+    log:
+        log_path("plots", "plot_analysis_counts.log")
+    benchmark:
+        benchmark_path("plots", "plot_analysis_counts.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "summarize_plot_analysis_counts.py").resolve()),
+        combined_metaprofile_output=Path(PLOT_COMBINED_METAPROFILE_PANEL).name,
+        proportion_reads_stop_at_bp_output=Path(PLOT_PROPORTION_READS_STOP_AT_BP).name,
+        downstream_exon_output=Path(PLOT_DOWNSTREAM_EXON_BRANCHPOINT_METAPROFILE).name,
+        premrna_output=Path(PLOT_PROPORTION_EXONIC).name,
+        percentile_ils_dis_output=Path(PLOT_PERCENTILE_ILS_DIS).name,
+        percentile_dis_ils_output=Path(PLOT_PERCENTILE_DIS_ILS).name,
+        ils_dis_pie_output=Path(PLOT_ILS_DIS_PIE).name,
+        example_browser_outputs=";".join(
+            [
+                Path(PLOT_EXAMPLE_GENE_BROWSER_PDF).name,
+                Path(PLOT_EXAMPLE_GENE_BROWSER_PNG).name,
+                Path(PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY).name,
+                Path(PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY).name,
+            ]
+        ),
+        benchmark_dir=str(Path(benchmark_path("plots", "plot_analysis_counts.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "plot_counts",
+            log_path("slurm", "plot_counts.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.summary})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --branchpoint-summary {input.branchpoint_summary} \
+          --branchpoint-three-prime {input.branchpoint_three_prime} \
+          --downstream-summary {input.downstream_summary} \
+          --premrna-summary {input.premrna_summary} \
+          --percentile-ils-dis {input.percentile_ils_dis} \
+          --percentile-dis-ils {input.percentile_dis_ils} \
+          --example-browser-stats {input.example_browser_stats} \
+          --combined-metaprofile-output {params.combined_metaprofile_output:q} \
+          --proportion-reads-stop-at-bp-output {params.proportion_reads_stop_at_bp_output:q} \
+          --downstream-exon-output {params.downstream_exon_output:q} \
+          --premrna-output {params.premrna_output:q} \
+          --percentile-ils-dis-output {params.percentile_ils_dis_output:q} \
+          --percentile-dis-ils-output {params.percentile_dis_ils_output:q} \
+          --ils-dis-pie-output {params.ils_dis_pie_output:q} \
+          --example-browser-outputs {params.example_browser_outputs:q} \
+          --output {output.summary} \
           > {log} 2>&1
         """
 

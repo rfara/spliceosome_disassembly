@@ -49,12 +49,12 @@ def parse_args():
     parser.add_argument("--site-counts", action="append", dest="site_counts", required=True)
     parser.add_argument("--intron-offsets", action="append", dest="intron_offsets", required=True)
     parser.add_argument("--three-prime-coverage", action="append", dest="three_prime_coverages", required=True)
-    parser.add_argument("--shared-min-reads", type=int, default=0)
+    parser.add_argument("--analysis-min-reads", type=int, default=0)
     parser.add_argument("--output-metaprofile-by-sample", required=True)
     parser.add_argument("--output-metaprofile-by-condition", required=True)
     parser.add_argument("--output-summary-by-sample", required=True)
     parser.add_argument("--output-summary-by-condition", required=True)
-    parser.add_argument("--output-shared-introns", required=True)
+    parser.add_argument("--output-analysis-introns", required=True)
     parser.add_argument("--output-three-prime-coverage-by-sample", required=True)
     parser.add_argument("--output-three-prime-coverage-by-condition", required=True)
     return parser.parse_args()
@@ -229,8 +229,8 @@ def summarise_condition_profiles(metaprofile_rows, condition_order, extra_group_
     return condition_rows
 
 
-def build_shared_intron_set(site_counts_by_sample, sample_order, shared_min_reads):
-    if shared_min_reads <= 0:
+def build_analysis_intron_set(site_counts_by_sample, sample_order, analysis_min_reads):
+    if analysis_min_reads <= 0:
         return {
             intron_id
             for sample in sample_order
@@ -245,15 +245,15 @@ def build_shared_intron_set(site_counts_by_sample, sample_order, shared_min_read
             {
                 intron_id
                 for intron_id, row in sample_rows.items()
-                if count_value(row, "anchored_fragments") >= shared_min_reads
+                if count_value(row, "anchored_fragments") >= analysis_min_reads
             }
         )
     if not qualifying_sets:
         return set()
     return set.intersection(*qualifying_sets)
 
-def build_shared_introns_rows(
-    shared_introns,
+def build_analysis_introns_rows(
+    analysis_introns,
     site_counts_by_sample,
     site_metadata,
     sample_order,
@@ -273,11 +273,11 @@ def build_shared_introns_rows(
         "branchpoint_score",
         "branchpoint_to_3ss_nt",
         "branchpoint_candidates",
-        "min_anchored_fragments_all_samples",
+        "min_anchored_fragments_across_samples",
     ] + [f"{sample}_anchored_fragments" for sample in sample_order]
 
     rows = []
-    for intron_id in sorted(shared_introns, key=lambda key: (site_metadata[key]["gene_name"], key)):
+    for intron_id in sorted(analysis_introns, key=lambda key: (site_metadata[key]["gene_name"], key)):
         metadata = site_metadata[intron_id]
         per_sample_counts = [
             count_value(site_counts_by_sample.get(sample, {}).get(intron_id, {}), "anchored_fragments")
@@ -298,7 +298,7 @@ def build_shared_introns_rows(
             "branchpoint_score": metadata["branchpoint_score"],
             "branchpoint_to_3ss_nt": metadata["branchpoint_to_3ss_nt"],
             "branchpoint_candidates": metadata["branchpoint_candidates"],
-            "min_anchored_fragments_all_samples": min(per_sample_counts) if per_sample_counts else 0,
+            "min_anchored_fragments_across_samples": min(per_sample_counts) if per_sample_counts else 0,
         }
         for sample, count in zip(sample_order, per_sample_counts):
             row[f"{sample}_anchored_fragments"] = count
@@ -306,17 +306,17 @@ def build_shared_introns_rows(
     return rows, fieldnames
 
 
-def aggregate_offset_counts(intron_offset_counts, shared_introns, offset_range):
+def aggregate_offset_counts(intron_offset_counts, analysis_introns, offset_range):
     offset_set = set(offset_range)
     total_counts = Counter()
-    for intron_id in shared_introns:
+    for intron_id in analysis_introns:
         for offset, read_count in intron_offset_counts.get(intron_id, {}).items():
             if offset in offset_set:
                 total_counts[offset] += read_count
     return total_counts
 
 
-def aggregate_coverage_counts(intron_offset_counts, site_metadata, shared_introns, offset_range):
+def aggregate_coverage_counts(intron_offset_counts, site_metadata, analysis_introns, offset_range):
     coverage_counts = Counter()
     ordered_offsets = sorted(offset_range)
     if not ordered_offsets:
@@ -324,7 +324,7 @@ def aggregate_coverage_counts(intron_offset_counts, site_metadata, shared_intron
 
     min_offset = ordered_offsets[0]
 
-    for intron_id in shared_introns:
+    for intron_id in analysis_introns:
         intron_offsets = intron_offset_counts.get(intron_id, {})
         three_prime_offset = count_value(site_metadata[intron_id], "branchpoint_to_3ss_nt")
 
@@ -410,23 +410,23 @@ def build_sample_summary_row(
     raw_summary_row,
     site_counts,
     total_offset_counts,
-    shared_introns,
-    shared_min_reads,
+    analysis_introns,
+    analysis_min_reads,
 ):
     summary_row = dict(raw_summary_row)
     library_fragments = count_value(raw_summary_row, "library_fragments")
     raw_anchored_fragments = count_value(raw_summary_row, "anchored_fragments")
     raw_anchored_introns = count_value(raw_summary_row, "anchored_introns_with_reads")
 
-    eligible_rows = [site_counts[intron_id] for intron_id in shared_introns if intron_id in site_counts]
+    eligible_rows = [site_counts[intron_id] for intron_id in analysis_introns if intron_id in site_counts]
     anchored_fragments = sum(count_value(row, "anchored_fragments") for row in eligible_rows)
     exact_branchpoint_fragments = sum(count_value(row, "exact_branchpoint_fragments") for row in eligible_rows)
     plus_one_branchpoint_fragments = sum(count_value(row, "plus_one_branchpoint_fragments") for row in eligible_rows)
     zero_or_plus_one_branchpoint_fragments = exact_branchpoint_fragments + plus_one_branchpoint_fragments
     profile_window_fragments = sum(total_offset_counts.values())
 
-    summary_row["shared_min_reads_all_samples"] = shared_min_reads
-    summary_row["shared_introns"] = len(shared_introns)
+    summary_row["min_anchored_reads_all_samples_for_analysis_inclusion"] = analysis_min_reads
+    summary_row["introns_included_in_analysis"] = len(analysis_introns)
     summary_row["raw_anchored_fragments"] = raw_anchored_fragments
     summary_row["raw_anchored_introns_with_reads"] = raw_anchored_introns
     summary_row["anchored_fragments"] = anchored_fragments
@@ -470,7 +470,7 @@ def build_sample_summary_row(
     return summary_row
 
 
-def aggregate_three_prime_coverage_from_path(path, shared_introns):
+def aggregate_three_prime_coverage_from_path(path, analysis_introns):
     sample = infer_sample_name_from_path(path)
     totals = Counter()
 
@@ -478,7 +478,7 @@ def aggregate_three_prime_coverage_from_path(path, shared_introns):
         row_sample = row.get("sample", "")
         if row_sample and row_sample != sample:
             raise ValueError(f"Expected one sample in {path}, found at least {sample!r} and {row_sample!r}")
-        if row["intron_id"] not in shared_introns:
+        if row["intron_id"] not in analysis_introns:
             continue
         totals[int(row["offset_nt"])] += int(row["coverage_count"])
 
@@ -539,18 +539,20 @@ def main():
     if missing_three_prime_samples:
         raise ValueError(f"Missing 3'SS coverage inputs for samples: {', '.join(missing_three_prime_samples)}")
 
-    shared_introns = build_shared_intron_set(site_counts_by_sample, sample_order, args.shared_min_reads)
-    shared_intron_rows, shared_intron_fieldnames = build_shared_introns_rows(
-        shared_introns,
+    analysis_introns = build_analysis_intron_set(site_counts_by_sample, sample_order, args.analysis_min_reads)
+    analysis_intron_rows, analysis_intron_fieldnames = build_analysis_introns_rows(
+        analysis_introns,
         site_counts_by_sample,
         site_metadata,
         sample_order,
     )
     three_prime_coverage_by_sample = {}
+    # Keep the 3'SS-centred panel on the exact same intron set included in analysis as the
+    # branchpoint-centred metaprofile so both panels share one feature universe.
     for sample in sample_order:
         _, three_prime_coverage_totals = aggregate_three_prime_coverage_from_path(
             three_prime_coverage_paths_by_sample[sample],
-            shared_introns,
+            analysis_introns,
         )
         three_prime_coverage_by_sample[sample] = three_prime_coverage_totals
 
@@ -561,13 +563,13 @@ def main():
         raw_summary_row = raw_summary_by_sample[sample]
         total_offset_counts = aggregate_offset_counts(
             intron_offsets_by_sample.get(sample, {}),
-            shared_introns,
+            analysis_introns,
             offset_range,
         )
         total_coverage_counts = aggregate_coverage_counts(
             intron_offsets_by_sample.get(sample, {}),
             site_metadata,
-            shared_introns,
+            analysis_introns,
             offset_range,
         )
         sample_profile_rows.extend(
@@ -575,7 +577,10 @@ def main():
                 sample,
                 raw_summary_row["condition"],
                 count_value(raw_summary_row, "library_fragments"),
-                sum(count_value(site_counts_by_sample.get(sample, {}).get(intron_id, {}), "anchored_fragments") for intron_id in shared_introns),
+                sum(
+                    count_value(site_counts_by_sample.get(sample, {}).get(intron_id, {}), "anchored_fragments")
+                    for intron_id in analysis_introns
+                ),
                 offset_range,
                 total_offset_counts,
                 total_coverage_counts,
@@ -586,8 +591,8 @@ def main():
                 raw_summary_row,
                 site_counts_by_sample.get(sample, {}),
                 total_offset_counts,
-                shared_introns,
-                args.shared_min_reads,
+                analysis_introns,
+                args.analysis_min_reads,
             )
         )
         sample_three_prime_rows.extend(
@@ -627,12 +632,13 @@ def main():
     )
     write_rows(args.output_summary_by_sample, sample_summary_rows, list(sample_summary_rows[0].keys()))
     write_rows(args.output_summary_by_condition, condition_summary_rows, list(condition_summary_rows[0].keys()))
-    write_rows(args.output_shared_introns, shared_intron_rows, shared_intron_fieldnames)
+    write_rows(args.output_analysis_introns, analysis_intron_rows, analysis_intron_fieldnames)
 
-    print(
-        f"Shared introns retained: {len(shared_introns)}"
-    )
-    print(f"Minimum anchored reads in all samples: {args.shared_min_reads}")
+    analysis_label = "anchor-positive introns included in analysis (union across samples)"
+    if args.analysis_min_reads > 0:
+        analysis_label = "introns included in analysis with minimum anchored reads in every sample"
+    print(f"{analysis_label}: {len(analysis_introns)}")
+    print(f"Minimum anchored reads required in every sample for analysis inclusion: {args.analysis_min_reads}")
     print(f"Metaprofile rows aggregated: {len(sample_profile_rows)}")
     print(f"3'SS coverage rows aggregated: {len(sample_three_prime_rows)}")
     print(f"Summary rows aggregated: {len(sample_summary_rows)}")
