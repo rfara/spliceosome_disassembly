@@ -19,7 +19,7 @@ This directory contains the Snakemake workflow for processing spliceosome disass
 - `anchored_percentile_overlap/`
 
 `results/plots` contains the final R-generated figures.
-It also contains `plot_analysis_counts.tsv`, which summarizes the read and feature counts used for each plot.
+It also contains `plot_analysis_counts.tsv`, which summarizes the read and feature counts used for each plot, and `results/plots/source_data/`, which contains compact supplementary tables underlying each plot.
 
 ## Running Locally
 

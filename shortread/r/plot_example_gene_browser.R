@@ -138,6 +138,9 @@ branchpoint_reference_path <- get_cli_arg(
 dedup_dir <- get_cli_arg("dedup-dir", file.path(shortread_dir, "results", "dedup"))
 output_stem_arg <- as_optional_string(get_cli_arg("output-stem", NULL))
 stats_output_path <- as_optional_string(get_cli_arg("stats-output", NULL))
+coverage_data_output_path <- as_optional_string(get_cli_arg("coverage-data-output", NULL))
+reads_data_output_path <- as_optional_string(get_cli_arg("reads-data-output", NULL))
+annotations_data_output_path <- as_optional_string(get_cli_arg("annotations-data-output", NULL))
 
 
 # Helpers -----------------------------------------------------------------
@@ -809,6 +812,73 @@ annotation_rects <- bind_rows(
 ) %>%
   filter(xmin <= xmax)
 
+annotation_source_data <- bind_rows(
+  annotation_rects %>%
+    left_join(
+      annotation_genes %>%
+        select(gene_id, gene_name, transcript_id, strand),
+      by = "gene_id"
+    ) %>%
+    transmute(
+      feature_type = feature,
+      gene_name,
+      transcript_id,
+      strand,
+      x = NA_real_,
+      xmin,
+      xmax,
+      y = NA_real_,
+      ymin,
+      ymax,
+      label = NA_character_
+    ),
+  branchpoints %>%
+    transmute(
+      feature_type = "branchpoint",
+      gene_name,
+      transcript_id,
+      strand,
+      x = as.numeric(branchpoint_position),
+      xmin = NA_real_,
+      xmax = NA_real_,
+      y = as.numeric(annotation_y),
+      ymin = NA_real_,
+      ymax = NA_real_,
+      label = NA_character_
+    ),
+  if (nrow(annotation_genes) == 0) {
+    tibble(
+      feature_type = "gene_label",
+      gene_name = NA_character_,
+      transcript_id = NA_character_,
+      strand = NA_character_,
+      x = mean(c(plot_region$start, plot_region$end)),
+      xmin = NA_real_,
+      xmax = NA_real_,
+      y = 1,
+      ymin = NA_real_,
+      ymax = NA_real_,
+      label = "no shared genes in region"
+    )
+  } else {
+    annotation_genes %>%
+      transmute(
+        feature_type = "gene_label",
+        gene_name,
+        transcript_id,
+        strand,
+        x = label_x,
+        xmin = NA_real_,
+        xmax = NA_real_,
+        y = annotation_y + 0.35,
+        ymin = NA_real_,
+        ymax = NA_real_,
+        label = paste0(gene_name, " (", strand, ")")
+      )
+  }
+) %>%
+  arrange(feature_type, gene_name, transcript_id, x, xmin, xmax)
+
 annotation_ylim <- c(0.5, max(1, nrow(annotation_genes)) + 0.65)
 
 annotation_plot <- ggplot(annotation_rects) +
@@ -904,6 +974,43 @@ if (!is.null(stats_output_path)) {
   ) %>%
     write_tsv(stats_output_path)
   message("Wrote ", stats_output_path)
+}
+
+if (!is.null(coverage_data_output_path)) {
+  dir.create(dirname(coverage_data_output_path), recursive = TRUE, showWarnings = FALSE)
+  coverage_by_condition %>%
+    transmute(
+      condition = as.character(condition),
+      position,
+      mean_coverage_per_million_intronic_reads = mean_coverage
+    ) %>%
+    arrange(condition, position) %>%
+    write_tsv(coverage_data_output_path)
+  message("Wrote ", coverage_data_output_path)
+}
+
+if (!is.null(reads_data_output_path)) {
+  dir.create(dirname(reads_data_output_path), recursive = TRUE, showWarnings = FALSE)
+  subsampled$reads %>%
+    transmute(
+      condition = as.character(condition),
+      sample,
+      read_name,
+      xmin,
+      xmax,
+      ymin,
+      ymax
+    ) %>%
+    arrange(condition, sample, ymin, xmin, xmax, read_name) %>%
+    write_tsv(reads_data_output_path)
+  message("Wrote ", reads_data_output_path)
+}
+
+if (!is.null(annotations_data_output_path)) {
+  dir.create(dirname(annotations_data_output_path), recursive = TRUE, showWarnings = FALSE)
+  annotation_source_data %>%
+    write_tsv(annotations_data_output_path)
+  message("Wrote ", annotations_data_output_path)
 }
 
 ggsave(paste0(output_stem, ".pdf"), example_gene_plot, width = 9, height = 5)

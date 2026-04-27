@@ -204,6 +204,43 @@ PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY = plot_path(
     "example_gene_browser_chr12_54282250_54282820.reads_only.pdf"
 )
 PLOT_ANALYSIS_COUNTS = plot_path("plot_analysis_counts.tsv")
+PLOT_SOURCE_DATA_BRANCHPOINT_COVERAGE = plot_path(
+    "source_data", "combined_metaprofile_panel.branchpoint_coverage.tsv"
+)
+PLOT_SOURCE_DATA_THREE_PRIME_COVERAGE = plot_path(
+    "source_data", "combined_metaprofile_panel.three_prime_splice_site_coverage.tsv"
+)
+PLOT_SOURCE_DATA_BRANCHPOINT_STOP = plot_path(
+    "source_data", "proportion_reads_stop_at_bp.tsv"
+)
+PLOT_SOURCE_DATA_DOWNSTREAM_EXON = plot_path(
+    "source_data", "dis_metaprofile_from_downstream_exon.tsv"
+)
+PLOT_SOURCE_DATA_PREMRNA_METAPROFILE = plot_path(
+    "source_data", "proportion_exonic_combined_plot.metaprofile.tsv"
+)
+PLOT_SOURCE_DATA_PREMRNA_EXONIC_FRACTION = plot_path(
+    "source_data", "proportion_exonic_combined_plot.exonic_fraction.tsv"
+)
+PLOT_SOURCE_DATA_PERCENTILE_ILS_DIS = plot_path(
+    "source_data", "percentile_ils_dis.tsv"
+)
+PLOT_SOURCE_DATA_PERCENTILE_DIS_ILS = plot_path(
+    "source_data", "percentile_dis_ils.tsv"
+)
+PLOT_SOURCE_DATA_ILS_DIS_PIE = plot_path(
+    "source_data", "ils_dis_pie.tsv"
+)
+PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_COVERAGE = plot_path(
+    "source_data", "example_gene_browser_chr12_54282250_54282820.coverage.tsv"
+)
+PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_READS = plot_path(
+    "source_data", "example_gene_browser_chr12_54282250_54282820.reads.tsv"
+)
+PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_ANNOTATIONS = plot_path(
+    "source_data", "example_gene_browser_chr12_54282250_54282820.annotations.tsv"
+)
+PLOT_SOURCE_DATA_MANIFEST = plot_path("source_data", "plot_source_data_manifest.tsv")
 EXAMPLE_GENE_BROWSER_REGION = "chr12:54282250-54282820"
 EXAMPLE_GENE_BROWSER_GENE = "HNRNPA1"
 RNA_CONTENT_REFERENCE = results_path("reference", "rna_content", "annotation.pkl")
@@ -497,6 +534,19 @@ rule all:
         PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY,
         PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY,
         PLOT_ANALYSIS_COUNTS,
+        PLOT_SOURCE_DATA_BRANCHPOINT_COVERAGE,
+        PLOT_SOURCE_DATA_THREE_PRIME_COVERAGE,
+        PLOT_SOURCE_DATA_BRANCHPOINT_STOP,
+        PLOT_SOURCE_DATA_DOWNSTREAM_EXON,
+        PLOT_SOURCE_DATA_PREMRNA_METAPROFILE,
+        PLOT_SOURCE_DATA_PREMRNA_EXONIC_FRACTION,
+        PLOT_SOURCE_DATA_PERCENTILE_ILS_DIS,
+        PLOT_SOURCE_DATA_PERCENTILE_DIS_ILS,
+        PLOT_SOURCE_DATA_ILS_DIS_PIE,
+        PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_COVERAGE,
+        PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_READS,
+        PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_ANNOTATIONS,
+        PLOT_SOURCE_DATA_MANIFEST,
 
 
 rule initialize_workdirs:
@@ -1997,7 +2047,10 @@ rule plot_example_gene_browser:
         png=PLOT_EXAMPLE_GENE_BROWSER_PNG,
         stats=PLOT_EXAMPLE_GENE_BROWSER_STATS,
         coverage_only=PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY,
-        reads_only=PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY
+        reads_only=PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY,
+        coverage_data=PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_COVERAGE,
+        reads_data=PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_READS,
+        annotations_data=PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_ANNOTATIONS
     log:
         log_path("r_plots", "example_gene_browser.log")
     benchmark:
@@ -2032,6 +2085,9 @@ rule plot_example_gene_browser:
           --gene {params.gene} \
           --region {params.region} \
           --stats-output {output.stats} \
+          --coverage-data-output {output.coverage_data} \
+          --reads-data-output {output.reads_data} \
+          --annotations-data-output {output.annotations_data} \
           --output-stem {params.output_stem} \
           > {log} 2>&1
         """
@@ -2100,6 +2156,99 @@ rule summarize_plot_analysis_counts:
           --ils-dis-pie-output {params.ils_dis_pie_output:q} \
           --example-browser-outputs {params.example_browser_outputs:q} \
           --output {output.summary} \
+          > {log} 2>&1
+        """
+
+
+rule export_plot_source_data:
+    input:
+        branchpoint_metaprofile=BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
+        branchpoint_three_prime=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
+        branchpoint_summary=BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
+        downstream_metaprofile=BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION,
+        premrna_metaprofile=PREMRNA_COMBINED_METAPROFILE_BY_CONDITION,
+        premrna_summary=PREMRNA_COMBINED_SUMMARY_BY_SAMPLE,
+        percentile_ils_dis=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_SUMMARY,
+        percentile_dis_ils=BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY,
+        example_browser_coverage=PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_COVERAGE,
+        example_browser_reads=PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_READS,
+        example_browser_annotations=PLOT_SOURCE_DATA_EXAMPLE_GENE_BROWSER_ANNOTATIONS
+    output:
+        branchpoint_coverage=PLOT_SOURCE_DATA_BRANCHPOINT_COVERAGE,
+        three_prime_coverage=PLOT_SOURCE_DATA_THREE_PRIME_COVERAGE,
+        branchpoint_stop=PLOT_SOURCE_DATA_BRANCHPOINT_STOP,
+        downstream_exon=PLOT_SOURCE_DATA_DOWNSTREAM_EXON,
+        premrna_metaprofile=PLOT_SOURCE_DATA_PREMRNA_METAPROFILE,
+        premrna_exonic_fraction=PLOT_SOURCE_DATA_PREMRNA_EXONIC_FRACTION,
+        percentile_ils_dis=PLOT_SOURCE_DATA_PERCENTILE_ILS_DIS,
+        percentile_dis_ils=PLOT_SOURCE_DATA_PERCENTILE_DIS_ILS,
+        ils_dis_pie=PLOT_SOURCE_DATA_ILS_DIS_PIE,
+        manifest=PLOT_SOURCE_DATA_MANIFEST
+    log:
+        log_path("plots", "plot_source_data.log")
+    benchmark:
+        benchmark_path("plots", "plot_source_data.tsv")
+    conda:
+        str(ENV_YAML)
+    params:
+        script=str((SCRIPTS_DIR / "export_plot_source_data.py").resolve()),
+        combined_metaprofile_output=Path(PLOT_COMBINED_METAPROFILE_PANEL).name,
+        proportion_reads_stop_at_bp_output=Path(PLOT_PROPORTION_READS_STOP_AT_BP).name,
+        downstream_exon_output=Path(PLOT_DOWNSTREAM_EXON_BRANCHPOINT_METAPROFILE).name,
+        premrna_output=Path(PLOT_PROPORTION_EXONIC).name,
+        percentile_ils_dis_output=Path(PLOT_PERCENTILE_ILS_DIS).name,
+        percentile_dis_ils_output=Path(PLOT_PERCENTILE_DIS_ILS).name,
+        ils_dis_pie_output=Path(PLOT_ILS_DIS_PIE).name,
+        example_browser_outputs=";".join(
+            [
+                Path(PLOT_EXAMPLE_GENE_BROWSER_PDF).name,
+                Path(PLOT_EXAMPLE_GENE_BROWSER_PNG).name,
+                Path(PLOT_EXAMPLE_GENE_BROWSER_COVERAGE_ONLY).name,
+                Path(PLOT_EXAMPLE_GENE_BROWSER_READS_ONLY).name,
+            ]
+        ),
+        benchmark_dir=str(Path(benchmark_path("plots", "plot_source_data.tsv")).parent),
+        cluster=slurm_cluster_args(
+            "c_short",
+            "4G",
+            "plot_data",
+            log_path("slurm", "plot_data.%A.log"),
+            1,
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.manifest})" "$(dirname {log})" "{params.benchmark_dir}"
+        python {params.script} \
+          --branchpoint-metaprofile {input.branchpoint_metaprofile} \
+          --branchpoint-three-prime {input.branchpoint_three_prime} \
+          --branchpoint-summary {input.branchpoint_summary} \
+          --downstream-metaprofile {input.downstream_metaprofile} \
+          --premrna-metaprofile {input.premrna_metaprofile} \
+          --premrna-summary {input.premrna_summary} \
+          --percentile-ils-dis {input.percentile_ils_dis} \
+          --percentile-dis-ils {input.percentile_dis_ils} \
+          --example-browser-coverage {input.example_browser_coverage} \
+          --example-browser-reads {input.example_browser_reads} \
+          --example-browser-annotations {input.example_browser_annotations} \
+          --combined-metaprofile-output {params.combined_metaprofile_output:q} \
+          --proportion-reads-stop-at-bp-output {params.proportion_reads_stop_at_bp_output:q} \
+          --downstream-exon-output {params.downstream_exon_output:q} \
+          --premrna-output {params.premrna_output:q} \
+          --percentile-ils-dis-output {params.percentile_ils_dis_output:q} \
+          --percentile-dis-ils-output {params.percentile_dis_ils_output:q} \
+          --ils-dis-pie-output {params.ils_dis_pie_output:q} \
+          --example-browser-outputs {params.example_browser_outputs:q} \
+          --output-branchpoint-coverage {output.branchpoint_coverage} \
+          --output-three-prime-coverage {output.three_prime_coverage} \
+          --output-branchpoint-stop {output.branchpoint_stop} \
+          --output-downstream-exon {output.downstream_exon} \
+          --output-premrna-metaprofile {output.premrna_metaprofile} \
+          --output-premrna-exonic-fraction {output.premrna_exonic_fraction} \
+          --output-percentile-ils-dis {output.percentile_ils_dis} \
+          --output-percentile-dis-ils {output.percentile_dis_ils} \
+          --output-ils-dis-pie {output.ils_dis_pie} \
+          --output-manifest {output.manifest} \
           > {log} 2>&1
         """
 
