@@ -67,15 +67,5 @@ tables. Analysis counts are written to
 Intermediate unmapped FASTQs, indexes, BAMs, logs, and benchmarks are ignored by
 Git.
 
-## Optimized metaprofile calculation
-
-[`summarize_metaprofiles.py`](scripts/summarize_metaprofiles.py) streams each BAM
-twice and uses point indexes, interval trees, and coverage difference arrays.
-It therefore avoids materializing the more than ten million individual TFIP11
-deletion-position rows that a direct table-based implementation would require.
-The downstream summary takes roughly 35 seconds from local cached alignments on
-this workstation, or about two minutes when reading the BAMs over the mounted
-cluster volume.
-
 Since each condition has one long-read library, the plots are descriptive and
 the workflow performs no replicate-based inferential statistics.
