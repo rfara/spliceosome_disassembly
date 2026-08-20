@@ -3,13 +3,16 @@
 import argparse
 import csv
 import gzip
+import subprocess
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import pysam
 
 
 INTRON_INDEX_BIN_SIZE = 1000
+CIGAR_REF_SKIP = 3
 
 
 @dataclass(frozen=True)
@@ -158,6 +161,66 @@ def oriented_offset(position, feature_position, strand):
     return feature_position - position
 
 
+def is_spliced_alignment(alignment):
+    if alignment.cigartuples is None:
+        return False
+    return any(operation == CIGAR_REF_SKIP and length > 0 for operation, length in alignment.cigartuples)
+
+
+@contextmanager
+def open_queryname_collated_bam(path):
+    process = subprocess.Popen(
+        ["samtools", "collate", "-u", "-O", path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if process.stdout is None:
+        raise RuntimeError(f"Failed to open samtools collate stdout for {path}")
+
+    bam = pysam.AlignmentFile(process.stdout, "rb")
+    try:
+        yield bam
+    finally:
+        bam.close()
+        stderr = b""
+        if process.stderr is not None:
+            stderr = process.stderr.read()
+            process.stderr.close()
+        return_code = process.wait()
+        if return_code != 0:
+            raise RuntimeError(
+                f"samtools collate failed for {path}: {stderr.decode(errors='replace').strip()}"
+            )
+
+
+def iter_queryname_groups(bam):
+    current_name = None
+    current_group = []
+    for alignment in bam.fetch(until_eof=True):
+        if current_name is None or alignment.query_name == current_name:
+            current_group.append(alignment)
+            current_name = alignment.query_name
+            continue
+        yield current_group
+        current_group = [alignment]
+        current_name = alignment.query_name
+    if current_group:
+        yield current_group
+
+
+def primary_alignment(group, read1):
+    primary = None
+    for alignment in group:
+        if alignment.is_read1 != read1:
+            continue
+        if alignment.is_secondary or alignment.is_supplementary:
+            continue
+        if primary is not None:
+            return None
+        primary = alignment
+    return primary
+
+
 def position_within_intron(position, intron):
     return intron.intron_start <= position <= intron.intron_end
 
@@ -167,7 +230,14 @@ def introns_for_five_prime_position(introns, intron_interval_index, chrom, stran
     return [introns[intron_id] for intron_id in intron_ids if position_within_intron(position, introns[intron_id])]
 
 
-def three_prime_spanning_introns(introns, intron_interval_index, chrom, strand, read1_five_prime, fragment_three_prime):
+def three_prime_spanning_introns(
+    introns,
+    intron_interval_index,
+    chrom,
+    strand,
+    read1_five_prime,
+    fragment_three_prime,
+):
     hits = []
     for intron in introns_for_five_prime_position(introns, intron_interval_index, chrom, strand, read1_five_prime):
         read1_five_prime_offset = oriented_offset(read1_five_prime, intron.three_prime_ss, intron.strand)
@@ -338,8 +408,15 @@ def write_offset_counts(path, sample, condition, offset_counts):
                 )
 
 
-def write_three_prime_coverage(path, sample, condition, coverage_counts):
-    fieldnames = ["sample", "condition", "intron_id", "offset_nt", "coverage_count"]
+def write_three_prime_coverage(path, sample, condition, coverage_counts, spanning_counts):
+    fieldnames = [
+        "sample",
+        "condition",
+        "intron_id",
+        "three_prime_spanning_fragments",
+        "offset_nt",
+        "coverage_count",
+    ]
     with open_text(path, "wt") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t")
         writer.writeheader()
@@ -350,6 +427,7 @@ def write_three_prime_coverage(path, sample, condition, coverage_counts):
                         "sample": sample,
                         "condition": condition,
                         "intron_id": intron_id,
+                        "three_prime_spanning_fragments": spanning_counts[intron_id],
                         "offset_nt": offset,
                         "coverage_count": coverage_counts[intron_id][offset],
                     }
@@ -376,6 +454,7 @@ def main():
     profile_counts = Counter()
     offset_counts = defaultdict(Counter)
     intron_three_prime_coverage_counts = defaultdict(Counter)
+    intron_three_prime_spanning_counts = Counter()
     site_counts = defaultdict(
         lambda: {
             "anchored_fragments": 0,
@@ -384,16 +463,19 @@ def main():
         }
     )
 
-    with pysam.AlignmentFile(args.bam, "rb") as bam:
-        for alignment in bam.fetch(until_eof=True):
-            if not alignment.is_read1:
+    with open_queryname_collated_bam(args.bam) as bam:
+        for group in iter_queryname_groups(bam):
+            for record in group:
+                if not record.is_read1:
+                    continue
+                counters["read1_records_examined"] += 1
+                if record.is_secondary or record.is_supplementary:
+                    counters["filtered_secondary_or_supplementary"] += 1
+
+            alignment = primary_alignment(group, True)
+            if alignment is None:
                 continue
 
-            counters["read1_records_examined"] += 1
-
-            if alignment.is_secondary or alignment.is_supplementary:
-                counters["filtered_secondary_or_supplementary"] += 1
-                continue
             if alignment.is_unmapped or alignment.mate_is_unmapped:
                 counters["filtered_unmapped_or_mate_unmapped"] += 1
                 continue
@@ -414,7 +496,17 @@ def main():
                 continue
 
             counters["library_fragments"] += 1
+            mate_alignment = primary_alignment(group, False)
+            if mate_alignment is None:
+                counters["filtered_missing_mate_alignment"] += 1
+                continue
             read1_five_prime = read1_five_prime_coordinate(alignment)
+
+            # These metaprofiles use continuous fragment spans, so drop any fragment whose
+            # read1 or mate alignment crosses a splice junction.
+            if is_spliced_alignment(alignment) or is_spliced_alignment(mate_alignment):
+                counters["filtered_spliced_fragments"] += 1
+                continue
 
             three_prime_hits = three_prime_spanning_introns(
                 introns,
@@ -431,6 +523,7 @@ def main():
             else:
                 coverage_intron, coverage_start_offset, coverage_end_offset = three_prime_hits[0]
                 counters["three_prime_spanning_fragments"] += 1
+                intron_three_prime_spanning_counts[coverage_intron.intron_id] += 1
                 update_three_prime_coverage_counts(
                     intron_three_prime_coverage_counts,
                     coverage_intron.intron_id,
@@ -536,6 +629,8 @@ def main():
         "filtered_improper_pair": counters["filtered_improper_pair"],
         "filtered_nonunique": counters["filtered_nonunique"],
         "filtered_missing_fragment_end": counters["filtered_missing_fragment_end"],
+        "filtered_missing_mate_alignment": counters["filtered_missing_mate_alignment"],
+        "filtered_spliced_fragments": counters["filtered_spliced_fragments"],
         "fragments_without_three_prime_coverage_assignment": counters[
             "fragments_without_three_prime_coverage_assignment"
         ],
@@ -559,6 +654,7 @@ def main():
         args.sample,
         args.condition,
         intron_three_prime_coverage_counts,
+        intron_three_prime_spanning_counts,
     )
     write_metaprofile(
         args.output_metaprofile,
@@ -576,6 +672,7 @@ def main():
     print(f"Condition: {args.condition}")
     print(f"Anchor window: -{args.anchor_upstream}..+{args.anchor_downstream} nt from 3'SS")
     print(f"Library fragments: {counters['library_fragments']}")
+    print(f"Filtered spliced fragments: {counters['filtered_spliced_fragments']}")
     print(f"3'SS-spanning fragments: {counters['three_prime_spanning_fragments']}")
     print(f"Anchored fragments: {counters['anchored_fragments']}")
     print(f"Exact branchpoint fragments: {counters['exact_branchpoint_fragments']}")

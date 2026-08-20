@@ -1,0 +1,4 @@
+sample	condition	replicate	barcode	library
+tfip11	TFIP11	1	bc1	Oxford Nanopore direct RNA
+dhx35	DHX35	1	bc2	Oxford Nanopore direct RNA
+

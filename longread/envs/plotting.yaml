@@ -1,0 +1,8 @@
+channels:
+  - conda-forge
+dependencies:
+  - r-base=4.4
+  - r-ggplot2=3.5
+  - r-readr=2.1
+  - r-dplyr=1.1
+

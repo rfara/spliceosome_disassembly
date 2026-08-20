@@ -145,6 +145,18 @@ BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION = results_path(
     "combined",
     "three_prime_coverage.by_condition.tsv",
 )
+BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_ALL_BY_SAMPLE = results_path(
+    "processed_data",
+    "branchpoint_metaprofiles",
+    "combined",
+    "three_prime_coverage.all_introns.by_sample.tsv",
+)
+BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_ALL_BY_CONDITION = results_path(
+    "processed_data",
+    "branchpoint_metaprofiles",
+    "combined",
+    "three_prime_coverage.all_introns.by_condition.tsv",
+)
 BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_SAMPLE = results_path(
     "processed_data",
     "downstream_exon_branchpoint_metaprofiles",
@@ -186,6 +198,7 @@ BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_INTRONS = results_path(
     "dis_ils_intron_counts.tsv.gz",
 )
 PLOT_COMBINED_METAPROFILE_PANEL = plot_path("combined_metaprofile_panel.pdf")
+PLOT_THREE_PRIME_METAPROFILE_ALL_INTRONS = plot_path("three_prime_splice_site_metaprofile_all_introns.pdf")
 PLOT_PROPORTION_READS_STOP_AT_BP = plot_path("proportion_reads_stop_at_bp.pdf")
 PLOT_DOWNSTREAM_EXON_BRANCHPOINT_METAPROFILE = plot_path("dis_metaprofile_from_downstream_exon.pdf")
 PLOT_PROPORTION_EXONIC = plot_path("proportion_exonic_combined_plot.pdf")
@@ -209,6 +222,9 @@ PLOT_SOURCE_DATA_BRANCHPOINT_COVERAGE = plot_path(
 )
 PLOT_SOURCE_DATA_THREE_PRIME_COVERAGE = plot_path(
     "source_data", "combined_metaprofile_panel.three_prime_splice_site_coverage.tsv"
+)
+PLOT_SOURCE_DATA_THREE_PRIME_COVERAGE_ALL_INTRONS = plot_path(
+    "source_data", "three_prime_splice_site_metaprofile_all_introns.tsv"
 )
 PLOT_SOURCE_DATA_BRANCHPOINT_STOP = plot_path(
     "source_data", "proportion_reads_stop_at_bp.tsv"
@@ -513,6 +529,8 @@ rule all:
         BRANCHPOINT_COMBINED_ANALYSIS_INTRONS,
         BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
         BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
+        BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_ALL_BY_SAMPLE,
+        BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_ALL_BY_CONDITION,
         BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_SAMPLE,
         BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION,
         BRANCHPOINT_DOWNSTREAM_EXON_SUMMARY_BY_SAMPLE,
@@ -522,6 +540,7 @@ rule all:
         BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_SUMMARY,
         BRANCHPOINT_ANCHORED_PERCENTILE_OVERLAP_INVERSE_INTRONS,
         PLOT_COMBINED_METAPROFILE_PANEL,
+        PLOT_THREE_PRIME_METAPROFILE_ALL_INTRONS,
         PLOT_PROPORTION_READS_STOP_AT_BP,
         PLOT_DOWNSTREAM_EXON_BRANCHPOINT_METAPROFILE,
         PLOT_PROPORTION_EXONIC,
@@ -536,6 +555,7 @@ rule all:
         PLOT_ANALYSIS_COUNTS,
         PLOT_SOURCE_DATA_BRANCHPOINT_COVERAGE,
         PLOT_SOURCE_DATA_THREE_PRIME_COVERAGE,
+        PLOT_SOURCE_DATA_THREE_PRIME_COVERAGE_ALL_INTRONS,
         PLOT_SOURCE_DATA_BRANCHPOINT_STOP,
         PLOT_SOURCE_DATA_DOWNSTREAM_EXON,
         PLOT_SOURCE_DATA_PREMRNA_METAPROFILE,
@@ -1659,7 +1679,9 @@ rule aggregate_branchpoint_profiles:
         summary_by_condition=BRANCHPOINT_COMBINED_SUMMARY_BY_CONDITION,
         analysis_introns=BRANCHPOINT_COMBINED_ANALYSIS_INTRONS,
         three_prime_coverage_by_sample=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_SAMPLE,
-        three_prime_coverage_by_condition=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION
+        three_prime_coverage_by_condition=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
+        three_prime_coverage_all_by_sample=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_ALL_BY_SAMPLE,
+        three_prime_coverage_all_by_condition=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_ALL_BY_CONDITION
     log:
         log_path("branchpoints_aggregate", "combined.log")
     benchmark:
@@ -1711,6 +1733,8 @@ rule aggregate_branchpoint_profiles:
           --output-analysis-introns {output.analysis_introns} \
           --output-three-prime-coverage-by-sample {output.three_prime_coverage_by_sample} \
           --output-three-prime-coverage-by-condition {output.three_prime_coverage_by_condition} \
+          --output-three-prime-coverage-all-by-sample {output.three_prime_coverage_all_by_sample} \
+          --output-three-prime-coverage-all-by-condition {output.three_prime_coverage_all_by_condition} \
           > {log} 2>&1
         """
 
@@ -1868,9 +1892,11 @@ rule analyze_branchpoint_anchored_percentile_overlap_inverse:
 rule plot_branchpoint_metaprofiles:
     input:
         metaprofile=BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
-        three_prime_coverage=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION
+        three_prime_coverage=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
+        three_prime_coverage_all=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_ALL_BY_CONDITION
     output:
-        pdf=PLOT_COMBINED_METAPROFILE_PANEL
+        pdf=PLOT_COMBINED_METAPROFILE_PANEL,
+        three_prime_all=PLOT_THREE_PRIME_METAPROFILE_ALL_INTRONS
     log:
         log_path("r_plots", "branchpoint_metaprofiles.log")
     benchmark:
@@ -1894,7 +1920,9 @@ rule plot_branchpoint_metaprofiles:
         Rscript {params.script} \
           --branchpoint-metaprofile {input.metaprofile} \
           --splice-site-metaprofile {input.three_prime_coverage} \
+          --splice-site-metaprofile-all {input.three_prime_coverage_all} \
           --output {output.pdf} \
+          --output-splice-site-all {output.three_prime_all} \
           > {log} 2>&1
         """
 
@@ -2113,6 +2141,7 @@ rule summarize_plot_analysis_counts:
     params:
         script=str((SCRIPTS_DIR / "summarize_plot_analysis_counts.py").resolve()),
         combined_metaprofile_output=Path(PLOT_COMBINED_METAPROFILE_PANEL).name,
+        three_prime_all_output=Path(PLOT_THREE_PRIME_METAPROFILE_ALL_INTRONS).name,
         proportion_reads_stop_at_bp_output=Path(PLOT_PROPORTION_READS_STOP_AT_BP).name,
         downstream_exon_output=Path(PLOT_DOWNSTREAM_EXON_BRANCHPOINT_METAPROFILE).name,
         premrna_output=Path(PLOT_PROPORTION_EXONIC).name,
@@ -2148,6 +2177,7 @@ rule summarize_plot_analysis_counts:
           --percentile-dis-ils {input.percentile_dis_ils} \
           --example-browser-stats {input.example_browser_stats} \
           --combined-metaprofile-output {params.combined_metaprofile_output:q} \
+          --three-prime-all-output {params.three_prime_all_output:q} \
           --proportion-reads-stop-at-bp-output {params.proportion_reads_stop_at_bp_output:q} \
           --downstream-exon-output {params.downstream_exon_output:q} \
           --premrna-output {params.premrna_output:q} \
@@ -2164,6 +2194,7 @@ rule export_plot_source_data:
     input:
         branchpoint_metaprofile=BRANCHPOINT_COMBINED_METAPROFILE_BY_CONDITION,
         branchpoint_three_prime=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_BY_CONDITION,
+        branchpoint_three_prime_all=BRANCHPOINT_COMBINED_THREE_PRIME_COVERAGE_ALL_BY_CONDITION,
         branchpoint_summary=BRANCHPOINT_COMBINED_SUMMARY_BY_SAMPLE,
         downstream_metaprofile=BRANCHPOINT_DOWNSTREAM_EXON_METAPROFILE_BY_CONDITION,
         premrna_metaprofile=PREMRNA_COMBINED_METAPROFILE_BY_CONDITION,
@@ -2176,6 +2207,7 @@ rule export_plot_source_data:
     output:
         branchpoint_coverage=PLOT_SOURCE_DATA_BRANCHPOINT_COVERAGE,
         three_prime_coverage=PLOT_SOURCE_DATA_THREE_PRIME_COVERAGE,
+        three_prime_coverage_all=PLOT_SOURCE_DATA_THREE_PRIME_COVERAGE_ALL_INTRONS,
         branchpoint_stop=PLOT_SOURCE_DATA_BRANCHPOINT_STOP,
         downstream_exon=PLOT_SOURCE_DATA_DOWNSTREAM_EXON,
         premrna_metaprofile=PLOT_SOURCE_DATA_PREMRNA_METAPROFILE,
@@ -2193,6 +2225,7 @@ rule export_plot_source_data:
     params:
         script=str((SCRIPTS_DIR / "export_plot_source_data.py").resolve()),
         combined_metaprofile_output=Path(PLOT_COMBINED_METAPROFILE_PANEL).name,
+        three_prime_all_output=Path(PLOT_THREE_PRIME_METAPROFILE_ALL_INTRONS).name,
         proportion_reads_stop_at_bp_output=Path(PLOT_PROPORTION_READS_STOP_AT_BP).name,
         downstream_exon_output=Path(PLOT_DOWNSTREAM_EXON_BRANCHPOINT_METAPROFILE).name,
         premrna_output=Path(PLOT_PROPORTION_EXONIC).name,
@@ -2222,6 +2255,7 @@ rule export_plot_source_data:
         python {params.script} \
           --branchpoint-metaprofile {input.branchpoint_metaprofile} \
           --branchpoint-three-prime {input.branchpoint_three_prime} \
+          --branchpoint-three-prime-all {input.branchpoint_three_prime_all} \
           --branchpoint-summary {input.branchpoint_summary} \
           --downstream-metaprofile {input.downstream_metaprofile} \
           --premrna-metaprofile {input.premrna_metaprofile} \
@@ -2232,6 +2266,7 @@ rule export_plot_source_data:
           --example-browser-reads {input.example_browser_reads} \
           --example-browser-annotations {input.example_browser_annotations} \
           --combined-metaprofile-output {params.combined_metaprofile_output:q} \
+          --three-prime-all-output {params.three_prime_all_output:q} \
           --proportion-reads-stop-at-bp-output {params.proportion_reads_stop_at_bp_output:q} \
           --downstream-exon-output {params.downstream_exon_output:q} \
           --premrna-output {params.premrna_output:q} \
@@ -2241,6 +2276,7 @@ rule export_plot_source_data:
           --example-browser-outputs {params.example_browser_outputs:q} \
           --output-branchpoint-coverage {output.branchpoint_coverage} \
           --output-three-prime-coverage {output.three_prime_coverage} \
+          --output-three-prime-coverage-all {output.three_prime_coverage_all} \
           --output-branchpoint-stop {output.branchpoint_stop} \
           --output-downstream-exon {output.downstream_exon} \
           --output-premrna-metaprofile {output.premrna_metaprofile} \

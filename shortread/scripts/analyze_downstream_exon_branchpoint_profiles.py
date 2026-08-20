@@ -4,14 +4,17 @@ import argparse
 import csv
 import gzip
 import math
+import subprocess
 import statistics
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import pysam
 
 
 INTRON_INDEX_BIN_SIZE = 1000
+CIGAR_REF_SKIP = 3
 T_CRITICAL_95_BY_DF = {
     1: 12.706,
     2: 4.303,
@@ -143,6 +146,66 @@ def oriented_offset(position, feature_position, strand):
     return feature_position - position
 
 
+def is_spliced_alignment(alignment):
+    if alignment.cigartuples is None:
+        return False
+    return any(operation == CIGAR_REF_SKIP and length > 0 for operation, length in alignment.cigartuples)
+
+
+@contextmanager
+def open_queryname_collated_bam(path):
+    process = subprocess.Popen(
+        ["samtools", "collate", "-u", "-O", path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if process.stdout is None:
+        raise RuntimeError(f"Failed to open samtools collate stdout for {path}")
+
+    bam = pysam.AlignmentFile(process.stdout, "rb")
+    try:
+        yield bam
+    finally:
+        bam.close()
+        stderr = b""
+        if process.stderr is not None:
+            stderr = process.stderr.read()
+            process.stderr.close()
+        return_code = process.wait()
+        if return_code != 0:
+            raise RuntimeError(
+                f"samtools collate failed for {path}: {stderr.decode(errors='replace').strip()}"
+            )
+
+
+def iter_queryname_groups(bam):
+    current_name = None
+    current_group = []
+    for alignment in bam.fetch(until_eof=True):
+        if current_name is None or alignment.query_name == current_name:
+            current_group.append(alignment)
+            current_name = alignment.query_name
+            continue
+        yield current_group
+        current_group = [alignment]
+        current_name = alignment.query_name
+    if current_group:
+        yield current_group
+
+
+def primary_alignment(group, read1):
+    primary = None
+    for alignment in group:
+        if alignment.is_read1 != read1:
+            continue
+        if alignment.is_secondary or alignment.is_supplementary:
+            continue
+        if primary is not None:
+            return None
+        primary = alignment
+    return primary
+
+
 def position_within_intron(position, intron):
     return intron.intron_start <= position <= intron.intron_end
 
@@ -214,16 +277,19 @@ def quantify_sample(
     coverage_counts = Counter()
     intron_counts = Counter()
 
-    with pysam.AlignmentFile(bam_path, "rb") as bam:
-        for alignment in bam.fetch(until_eof=True):
-            if not alignment.is_read1:
+    with open_queryname_collated_bam(bam_path) as bam:
+        for group in iter_queryname_groups(bam):
+            for record in group:
+                if not record.is_read1:
+                    continue
+                counters["read1_records_examined"] += 1
+                if record.is_secondary or record.is_supplementary:
+                    counters["filtered_secondary_or_supplementary"] += 1
+
+            alignment = primary_alignment(group, True)
+            if alignment is None:
                 continue
 
-            counters["read1_records_examined"] += 1
-
-            if alignment.is_secondary or alignment.is_supplementary:
-                counters["filtered_secondary_or_supplementary"] += 1
-                continue
             if alignment.is_unmapped or alignment.mate_is_unmapped:
                 counters["filtered_unmapped_or_mate_unmapped"] += 1
                 continue
@@ -244,6 +310,15 @@ def quantify_sample(
                 continue
 
             counters["library_fragments"] += 1
+            mate_alignment = primary_alignment(group, False)
+            if mate_alignment is None:
+                counters["filtered_missing_mate_alignment"] += 1
+                continue
+            # This plot also fills continuous fragment spans, so exclude any fragment whose
+            # read1 or mate alignment crosses a splice junction.
+            if is_spliced_alignment(alignment) or is_spliced_alignment(mate_alignment):
+                counters["filtered_spliced_fragments"] += 1
+                continue
             read1_five_prime = read1_five_prime_coordinate(alignment)
             hits = downstream_exon_spanning_introns(
                 introns,
@@ -342,12 +417,14 @@ def quantify_sample(
         "filtered_improper_pair": counters["filtered_improper_pair"],
         "filtered_nonunique": counters["filtered_nonunique"],
         "filtered_missing_fragment_end": counters["filtered_missing_fragment_end"],
+        "filtered_missing_mate_alignment": counters["filtered_missing_mate_alignment"],
+        "filtered_spliced_fragments": counters["filtered_spliced_fragments"],
         "fragments_without_downstream_exon_assignment": counters["fragments_without_downstream_exon_assignment"],
         "ambiguous_downstream_exon_fragments": counters["ambiguous_downstream_exon_fragments"],
         "filtered_inverted_fragment_offsets": counters["filtered_inverted_fragment_offsets"],
     }
 
-    return summary_row, start_counts, coverage_counts
+    return summary_row, start_counts, coverage_counts, set(intron_counts)
 
 
 def build_sample_metaprofile_rows(
@@ -480,9 +557,10 @@ def main():
     sample_profile_rows = []
     sample_bams = [(sample, condition, bam) for sample, condition, bam in args.sample_bam]
     condition_order = condition_order_from_samples(sample_bams)
+    condition_intron_unions = defaultdict(set)
 
     for sample, condition, bam_path in sample_bams:
-        summary_row, start_counts, coverage_counts = quantify_sample(
+        summary_row, start_counts, coverage_counts, selected_introns = quantify_sample(
             sample,
             condition,
             bam_path,
@@ -492,6 +570,7 @@ def main():
             args.profile_upstream,
             args.profile_downstream,
         )
+        condition_intron_unions[condition].update(selected_introns)
         sample_summary_rows.append(summary_row)
         sample_profile_rows.extend(
             build_sample_metaprofile_rows(
@@ -508,6 +587,11 @@ def main():
         print(
             f"{sample}: downstream-exon-spanning fragments = "
             f"{summary_row['downstream_exon_spanning_fragments']}"
+        )
+
+    for summary_row in sample_summary_rows:
+        summary_row["condition_union_downstream_exon_spanning_introns"] = len(
+            condition_intron_unions[summary_row["condition"]]
         )
 
     sample_summary_rows.sort(key=lambda row: (condition_order.index(row["condition"]), row["sample"]))

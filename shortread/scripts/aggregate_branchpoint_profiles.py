@@ -57,6 +57,8 @@ def parse_args():
     parser.add_argument("--output-analysis-introns", required=True)
     parser.add_argument("--output-three-prime-coverage-by-sample", required=True)
     parser.add_argument("--output-three-prime-coverage-by-condition", required=True)
+    parser.add_argument("--output-three-prime-coverage-all-by-sample", required=True)
+    parser.add_argument("--output-three-prime-coverage-all-by-condition", required=True)
     return parser.parse_args()
 
 
@@ -410,11 +412,16 @@ def build_sample_summary_row(
     raw_summary_row,
     site_counts,
     total_offset_counts,
+    three_prime_spanning_fragments,
+    three_prime_introns_with_coverage,
+    all_three_prime_introns_with_coverage_across_samples,
     analysis_introns,
     analysis_min_reads,
 ):
     summary_row = dict(raw_summary_row)
     library_fragments = count_value(raw_summary_row, "library_fragments")
+    raw_three_prime_spanning_fragments = count_value(raw_summary_row, "three_prime_spanning_fragments")
+    raw_three_prime_introns = count_value(raw_summary_row, "three_prime_introns_with_coverage")
     raw_anchored_fragments = count_value(raw_summary_row, "anchored_fragments")
     raw_anchored_introns = count_value(raw_summary_row, "anchored_introns_with_reads")
 
@@ -427,6 +434,16 @@ def build_sample_summary_row(
 
     summary_row["min_anchored_reads_all_samples_for_analysis_inclusion"] = analysis_min_reads
     summary_row["introns_included_in_analysis"] = len(analysis_introns)
+    summary_row["raw_three_prime_spanning_fragments"] = raw_three_prime_spanning_fragments
+    summary_row["raw_three_prime_introns_with_coverage"] = raw_three_prime_introns
+    summary_row["three_prime_spanning_fragments"] = three_prime_spanning_fragments
+    summary_row["three_prime_spanning_fragments_cpm"] = (
+        0.0 if library_fragments == 0 else three_prime_spanning_fragments * 1_000_000.0 / library_fragments
+    )
+    summary_row["three_prime_introns_with_coverage"] = three_prime_introns_with_coverage
+    summary_row["all_three_prime_introns_with_coverage_across_samples"] = (
+        all_three_prime_introns_with_coverage_across_samples
+    )
     summary_row["raw_anchored_fragments"] = raw_anchored_fragments
     summary_row["raw_anchored_introns_with_reads"] = raw_anchored_introns
     summary_row["anchored_fragments"] = anchored_fragments
@@ -470,19 +487,43 @@ def build_sample_summary_row(
     return summary_row
 
 
-def aggregate_three_prime_coverage_from_path(path, analysis_introns):
+def load_three_prime_coverage_from_path(path):
     sample = infer_sample_name_from_path(path)
-    totals = Counter()
+    intron_totals = defaultdict(Counter)
+    intron_spanning_counts = {}
+    saw_spanning_count = False
 
     for row in iter_tsv_rows(path):
         row_sample = row.get("sample", "")
         if row_sample and row_sample != sample:
             raise ValueError(f"Expected one sample in {path}, found at least {sample!r} and {row_sample!r}")
-        if row["intron_id"] not in analysis_introns:
-            continue
-        totals[int(row["offset_nt"])] += int(row["coverage_count"])
+        intron_id = row["intron_id"]
+        intron_totals[intron_id][int(row["offset_nt"])] += int(row["coverage_count"])
+        spanning_count = row.get("three_prime_spanning_fragments", "")
+        if spanning_count not in {"", None}:
+            intron_spanning_counts.setdefault(intron_id, int(float(spanning_count)))
+            saw_spanning_count = True
 
-    return sample, totals
+    if intron_totals and not saw_spanning_count:
+        raise ValueError(
+            f"3'SS coverage input {path} is missing three_prime_spanning_fragments counts needed for aggregation"
+        )
+
+    return sample, intron_totals, intron_spanning_counts
+
+
+def aggregate_three_prime_coverage(intron_totals, intron_spanning_counts, selected_introns):
+    totals = Counter()
+    spanning_fragments = 0
+    introns_with_coverage = 0
+    for intron_id in selected_introns:
+        if intron_id not in intron_totals:
+            continue
+        introns_with_coverage += 1
+        spanning_fragments += intron_spanning_counts.get(intron_id, 0)
+        for offset, coverage_count in intron_totals[intron_id].items():
+            totals[offset] += coverage_count
+    return totals, spanning_fragments, introns_with_coverage
 
 
 def main():
@@ -539,6 +580,15 @@ def main():
     if missing_three_prime_samples:
         raise ValueError(f"Missing 3'SS coverage inputs for samples: {', '.join(missing_three_prime_samples)}")
 
+    three_prime_raw_by_sample = {}
+    all_three_prime_introns = set()
+    for sample in sample_order:
+        _, intron_totals, intron_spanning_counts = load_three_prime_coverage_from_path(
+            three_prime_coverage_paths_by_sample[sample]
+        )
+        three_prime_raw_by_sample[sample] = (intron_totals, intron_spanning_counts)
+        all_three_prime_introns.update(intron_totals)
+
     analysis_introns = build_analysis_intron_set(site_counts_by_sample, sample_order, args.analysis_min_reads)
     analysis_intron_rows, analysis_intron_fieldnames = build_analysis_introns_rows(
         analysis_introns,
@@ -547,17 +597,43 @@ def main():
         sample_order,
     )
     three_prime_coverage_by_sample = {}
+    three_prime_spanning_by_sample = {}
+    three_prime_introns_by_sample = {}
+    three_prime_coverage_all_by_sample = {}
+    three_prime_spanning_all_by_sample = {}
+    three_prime_introns_all_by_sample = {}
     # Keep the 3'SS-centred panel on the exact same intron set included in analysis as the
     # branchpoint-centred metaprofile so both panels share one feature universe.
     for sample in sample_order:
-        _, three_prime_coverage_totals = aggregate_three_prime_coverage_from_path(
-            three_prime_coverage_paths_by_sample[sample],
+        intron_totals, intron_spanning_counts = three_prime_raw_by_sample[sample]
+        (
+            three_prime_coverage_totals,
+            three_prime_spanning_fragments,
+            three_prime_introns_with_coverage,
+        ) = aggregate_three_prime_coverage(
+            intron_totals,
+            intron_spanning_counts,
             analysis_introns,
         )
         three_prime_coverage_by_sample[sample] = three_prime_coverage_totals
+        three_prime_spanning_by_sample[sample] = three_prime_spanning_fragments
+        three_prime_introns_by_sample[sample] = three_prime_introns_with_coverage
+        (
+            three_prime_coverage_all_totals,
+            three_prime_spanning_all_fragments,
+            three_prime_introns_all_with_coverage,
+        ) = aggregate_three_prime_coverage(
+            intron_totals,
+            intron_spanning_counts,
+            all_three_prime_introns,
+        )
+        three_prime_coverage_all_by_sample[sample] = three_prime_coverage_all_totals
+        three_prime_spanning_all_by_sample[sample] = three_prime_spanning_all_fragments
+        three_prime_introns_all_by_sample[sample] = three_prime_introns_all_with_coverage
 
     sample_profile_rows = []
     sample_three_prime_rows = []
+    sample_three_prime_all_rows = []
     sample_summary_rows = []
     for sample in sample_order:
         raw_summary_row = raw_summary_by_sample[sample]
@@ -591,6 +667,9 @@ def main():
                 raw_summary_row,
                 site_counts_by_sample.get(sample, {}),
                 total_offset_counts,
+                three_prime_spanning_by_sample.get(sample, 0),
+                three_prime_introns_by_sample.get(sample, 0),
+                len(all_three_prime_introns),
                 analysis_introns,
                 args.analysis_min_reads,
             )
@@ -600,9 +679,19 @@ def main():
                 sample,
                 raw_summary_row["condition"],
                 count_value(raw_summary_row, "library_fragments"),
-                three_prime_coverage_by_sample.get(sample, Counter())[0],
+                three_prime_spanning_by_sample.get(sample, 0),
                 three_prime_offset_range,
                 three_prime_coverage_by_sample.get(sample, Counter()),
+            )
+        )
+        sample_three_prime_all_rows.extend(
+            build_sample_three_prime_coverage_rows(
+                sample,
+                raw_summary_row["condition"],
+                count_value(raw_summary_row, "library_fragments"),
+                three_prime_spanning_all_by_sample.get(sample, 0),
+                three_prime_offset_range,
+                three_prime_coverage_all_by_sample.get(sample, Counter()),
             )
         )
 
@@ -612,10 +701,14 @@ def main():
     sample_three_prime_rows.sort(
         key=lambda row: (condition_order.index(row["condition"]), row["sample"], int(row["offset_nt"]))
     )
+    sample_three_prime_all_rows.sort(
+        key=lambda row: (condition_order.index(row["condition"]), row["sample"], int(row["offset_nt"]))
+    )
     sample_summary_rows.sort(key=lambda row: (condition_order.index(row["condition"]), row["sample"]))
 
     condition_rows = summarise_condition_profiles(sample_profile_rows, condition_order)
     condition_three_prime_rows = summarise_condition_profiles(sample_three_prime_rows, condition_order)
+    condition_three_prime_all_rows = summarise_condition_profiles(sample_three_prime_all_rows, condition_order)
     condition_summary_rows = summarise_condition_rows(sample_summary_rows, condition_order)
 
     write_rows(args.output_metaprofile_by_sample, sample_profile_rows, list(sample_profile_rows[0].keys()))
@@ -630,6 +723,16 @@ def main():
         condition_three_prime_rows,
         list(condition_three_prime_rows[0].keys()),
     )
+    write_rows(
+        args.output_three_prime_coverage_all_by_sample,
+        sample_three_prime_all_rows,
+        list(sample_three_prime_all_rows[0].keys()),
+    )
+    write_rows(
+        args.output_three_prime_coverage_all_by_condition,
+        condition_three_prime_all_rows,
+        list(condition_three_prime_all_rows[0].keys()),
+    )
     write_rows(args.output_summary_by_sample, sample_summary_rows, list(sample_summary_rows[0].keys()))
     write_rows(args.output_summary_by_condition, condition_summary_rows, list(condition_summary_rows[0].keys()))
     write_rows(args.output_analysis_introns, analysis_intron_rows, analysis_intron_fieldnames)
@@ -641,6 +744,7 @@ def main():
     print(f"Minimum anchored reads required in every sample for analysis inclusion: {args.analysis_min_reads}")
     print(f"Metaprofile rows aggregated: {len(sample_profile_rows)}")
     print(f"3'SS coverage rows aggregated: {len(sample_three_prime_rows)}")
+    print(f"3'SS all-introns coverage rows aggregated: {len(sample_three_prime_all_rows)}")
     print(f"Summary rows aggregated: {len(sample_summary_rows)}")
 
 

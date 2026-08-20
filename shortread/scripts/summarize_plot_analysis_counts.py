@@ -18,6 +18,7 @@ def parse_args():
     parser.add_argument("--percentile-dis-ils", required=True)
     parser.add_argument("--example-browser-stats", required=True)
     parser.add_argument("--combined-metaprofile-output", required=True)
+    parser.add_argument("--three-prime-all-output", required=True)
     parser.add_argument("--proportion-reads-stop-at-bp-output", required=True)
     parser.add_argument("--downstream-exon-output", required=True)
     parser.add_argument("--premrna-output", required=True)
@@ -92,6 +93,14 @@ def branchpoint_notes(analysis_min_reads, base_message):
     return f"{base_message} Introns included in analysis are defined by the minimum anchored-read threshold in every sample."
 
 
+def anchor_window_label(summary_row):
+    upstream = count_value(summary_row, "anchor_upstream_nt")
+    downstream = count_value(summary_row, "anchor_downstream_nt")
+    if upstream is None or downstream is None:
+        return "the configured 3'SS anchor window"
+    return f"the -{upstream}..+{downstream} nt 3'SS anchor window"
+
+
 def build_condition_row(
     *,
     plot_id,
@@ -142,7 +151,7 @@ def main():
     args = parse_args()
 
     branchpoint_summary_rows = read_tsv(args.branchpoint_summary)
-    branchpoint_three_prime_rows = read_tsv(args.branchpoint_three_prime)
+    _branchpoint_three_prime_rows = read_tsv(args.branchpoint_three_prime)
     downstream_summary_rows = read_tsv(args.downstream_summary)
     premrna_summary_rows = read_tsv(args.premrna_summary)
     percentile_ils_dis_rows = read_tsv(args.percentile_ils_dis)
@@ -177,18 +186,13 @@ def main():
     rows = []
 
     branchpoint_by_condition = group_rows_by_condition(branchpoint_summary_rows)
-    three_prime_at_zero_by_sample = {}
-    for row in branchpoint_three_prime_rows:
-        if int(row["offset_nt"]) != 0:
-            continue
-        three_prime_at_zero_by_sample[row["sample"]] = int(float(row["coverage_count"]))
-
     for condition, sample_rows in branchpoint_by_condition.items():
         analysis_introns = count_value(sample_rows[0], "introns_included_in_analysis")
         analysis_min_reads = count_value(
             sample_rows[0],
             "min_anchored_reads_all_samples_for_analysis_inclusion",
         )
+        anchor_window = anchor_window_label(sample_rows[0])
         rows.append(
             build_condition_row(
                 plot_id="combined_metaprofile_panel",
@@ -203,7 +207,7 @@ def main():
                 selection=branchpoint_selection_label(analysis_min_reads),
                 notes=branchpoint_notes(
                     analysis_min_reads,
-                    "Condition traces are replicate means on the intron set included in analysis.",
+                    f"Condition traces are replicate means for unspliced fragments with fragment 3' ends in {anchor_window} on the intron set included in analysis.",
                 ),
             )
         )
@@ -216,14 +220,34 @@ def main():
                 feature_type="introns_included_in_analysis",
                 feature_count=analysis_introns,
                 read_type="three_prime_spanning_fragments",
-                read_count=sum(three_prime_at_zero_by_sample[row["sample"]] for row in sample_rows),
-                per_sample_read_counts=";".join(
-                    f"{row['sample']}={three_prime_at_zero_by_sample[row['sample']]}" for row in sample_rows
-                ),
+                read_count=sum(count_value(row, "three_prime_spanning_fragments") for row in sample_rows),
+                per_sample_read_counts=format_per_sample_counts(sample_rows, "three_prime_spanning_fragments"),
                 selection=branchpoint_selection_label(analysis_min_reads),
                 notes=branchpoint_notes(
                     analysis_min_reads,
-                    "Read count equals aggregate 3'SS coverage_count at offset 0 on the same intron set included in analysis as the branchpoint panel.",
+                    "Read count equals unspliced fragments whose span touches or crosses the 3'SS on the same intron set included in analysis as the branchpoint panel.",
+                ),
+            )
+        )
+        rows.append(
+            build_condition_row(
+                plot_id="three_prime_splice_site_metaprofile_all_introns",
+                output_files=args.three_prime_all_output,
+                panel="main",
+                condition=condition,
+                feature_type="three_prime_introns_with_any_coverage_in_any_sample",
+                feature_count=count_value(sample_rows[0], "all_three_prime_introns_with_coverage_across_samples"),
+                read_type="raw_three_prime_spanning_fragments",
+                read_count=sum(count_value(row, "raw_three_prime_spanning_fragments") for row in sample_rows),
+                per_sample_read_counts=format_per_sample_counts(sample_rows, "raw_three_prime_spanning_fragments"),
+                per_sample_feature_counts=format_per_sample_counts(
+                    sample_rows,
+                    "raw_three_prime_introns_with_coverage",
+                ),
+                selection="all_three_prime_positive_introns_union",
+                notes=(
+                    "Condition traces are replicate means for unspliced fragments whose span touches or crosses "
+                    "the 3'SS, aggregated over the union of introns with any such read in any sample."
                 ),
             )
         )
@@ -257,6 +281,10 @@ def main():
                 panel="main",
                 condition=condition,
                 feature_type="downstream_exon_spanning_introns",
+                feature_count=count_value(
+                    sample_rows[0],
+                    "condition_union_downstream_exon_spanning_introns",
+                ),
                 secondary_feature_type="reference_introns",
                 secondary_feature_count=count_value(sample_rows[0], "reference_introns"),
                 read_type="downstream_exon_spanning_fragments",
@@ -267,7 +295,10 @@ def main():
                     f"proper_pairs_with_fragment_end_at_least_"
                     f"{count_value(sample_rows[0], 'downstream_exon_min_offset_nt')}_nt_into_downstream_exon"
                 ),
-                notes="Condition trace is the DIS replicate mean; downstream-exon-spanning intron counts vary by sample.",
+                notes=(
+                    "Condition trace is the DIS replicate mean; feature_count is the union of "
+                    "downstream-exon-spanning introns across DIS samples, while per-sample intron counts vary."
+                ),
             )
         )
 

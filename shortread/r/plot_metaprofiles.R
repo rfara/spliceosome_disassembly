@@ -31,7 +31,12 @@ required_arg <- function(name) {
 branchpoint_metaprofile_path <- required_arg("branchpoint-metaprofile")
 splice_site_metaprofile_path <- required_arg("splice-site-metaprofile")
 output_path <- required_arg("output")
+splice_site_metaprofile_all_path <- get_cli_arg("splice-site-metaprofile-all")
+splice_site_output_all_path <- get_cli_arg("output-splice-site-all")
 dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+if (!is.null(splice_site_output_all_path) && nzchar(splice_site_output_all_path)) {
+  dir.create(dirname(splice_site_output_all_path), recursive = TRUE, showWarnings = FALSE)
+}
 
 # Load --------------------------------------------------------------------
 
@@ -40,6 +45,12 @@ bp_meta <- read_tsv(branchpoint_metaprofile_path) %>%
 
 ss_meta <- read_tsv(splice_site_metaprofile_path) %>%
   mutate(condition = condition %>% fct_relevel("DIS"))
+
+ss_meta_all <- NULL
+if (!is.null(splice_site_metaprofile_all_path) && nzchar(splice_site_metaprofile_all_path)) {
+  ss_meta_all <- read_tsv(splice_site_metaprofile_all_path) %>%
+    mutate(condition = condition %>% fct_relevel("DIS"))
+}
 
 # Plot --------------------------------------------------------------------
 
@@ -62,29 +73,40 @@ ggplot(bp_meta, aes(x = offset_nt, color = condition, fill = condition)) +
   scale_fill_manual(values = c("#D33B76", "black")) ->
   bp_meta_plot
 
-ggplot(ss_meta, aes(x = offset_nt, color = condition, fill = condition)) +
-  geom_line(aes(y = mean_coverage_spanning_percent), alpha = 0.5, show.legend = F) +
-  geom_ribbon(aes(ymax = mean_coverage_spanning_percent, ymin = 0), alpha = 0.5, linewidth = 0,
-              show.legend = F) +
-  geom_ribbon(aes(ymin = mean_coverage_spanning_percent - ci95_coverage_spanning_percent, 
-                  ymax = mean_coverage_spanning_percent + ci95_coverage_spanning_percent),
-              alpha = 0.5, linewidth = 0) +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  coord_cartesian(xlim = c(-10, 10)) +
-  theme_classic() +
-  theme(axis.ticks = element_line(color = "black"),
-        axis.text = element_text(color = "black"),
+build_ss_meta_plot <- function(ss_data, hide_y_axis = FALSE) {
+  plot <- ggplot(ss_data, aes(x = offset_nt, color = condition, fill = condition)) +
+    geom_line(aes(y = mean_coverage_spanning_percent), alpha = 0.5, show.legend = F) +
+    geom_ribbon(aes(ymax = mean_coverage_spanning_percent, ymin = 0), alpha = 0.5, linewidth = 0,
+                show.legend = F) +
+    geom_ribbon(aes(ymin = mean_coverage_spanning_percent - ci95_coverage_spanning_percent,
+                    ymax = mean_coverage_spanning_percent + ci95_coverage_spanning_percent),
+                alpha = 0.5, linewidth = 0) +
+    geom_vline(xintercept = 0, linetype = "dashed") +
+    coord_cartesian(xlim = c(-10, 10)) +
+    theme_classic() +
+    theme(axis.ticks = element_line(color = "black"),
+          axis.text = element_text(color = "black")) +
+    guides(color = "none") +
+    labs(x = "distance from 3'SS (nt)",
+         y = "average read coverage\n(percentage)",
+         fill = "") +
+    scale_color_manual(values = c("#D33B76", "black")) +
+    scale_fill_manual(values = c("#D33B76", "black"))
+
+  if (hide_y_axis) {
+    plot <- plot +
+      theme(
         axis.line.y = element_blank(),
         axis.ticks.y = element_blank(),
         axis.text.y = element_blank(),
-        axis.title.y = element_blank()) +
-  guides(color = "none") +
-  labs(x = "distance from 3'SS (nt)",
-       y = "average read coverage\n(percentage)",
-       fill = "")  +
-  scale_color_manual(values = c("#D33B76", "black")) +
-  scale_fill_manual(values = c("#D33B76", "black")) ->
-  ss_meta_plot
+        axis.title.y = element_blank()
+      )
+  }
+
+  plot
+}
+
+ss_meta_plot <- build_ss_meta_plot(ss_meta, hide_y_axis = TRUE)
 
 bp_feature_rects <- tibble(
   feature = "intron",
@@ -172,3 +194,9 @@ ss_panel <- (ss_meta_plot / ss_feature_plot) +
   combined_metaprofile_panel
 
 ggsave(output_path, combined_metaprofile_panel, width = 8, height = 2.5)
+
+if (!is.null(ss_meta_all) && !is.null(splice_site_output_all_path) && nzchar(splice_site_output_all_path)) {
+  ss_all_panel <- (build_ss_meta_plot(ss_meta_all, hide_y_axis = FALSE) / ss_feature_plot) +
+    plot_layout(heights = c(10, 1))
+  ggsave(splice_site_output_all_path, ss_all_panel, width = 3.2, height = 2.5)
+}

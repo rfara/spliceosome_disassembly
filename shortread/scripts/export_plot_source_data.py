@@ -11,6 +11,7 @@ def parse_args():
     )
     parser.add_argument("--branchpoint-metaprofile", required=True)
     parser.add_argument("--branchpoint-three-prime", required=True)
+    parser.add_argument("--branchpoint-three-prime-all", required=True)
     parser.add_argument("--branchpoint-summary", required=True)
     parser.add_argument("--downstream-metaprofile", required=True)
     parser.add_argument("--premrna-metaprofile", required=True)
@@ -21,6 +22,7 @@ def parse_args():
     parser.add_argument("--example-browser-reads", required=True)
     parser.add_argument("--example-browser-annotations", required=True)
     parser.add_argument("--combined-metaprofile-output", required=True)
+    parser.add_argument("--three-prime-all-output", required=True)
     parser.add_argument("--proportion-reads-stop-at-bp-output", required=True)
     parser.add_argument("--downstream-exon-output", required=True)
     parser.add_argument("--premrna-output", required=True)
@@ -30,6 +32,7 @@ def parse_args():
     parser.add_argument("--example-browser-outputs", required=True)
     parser.add_argument("--output-branchpoint-coverage", required=True)
     parser.add_argument("--output-three-prime-coverage", required=True)
+    parser.add_argument("--output-three-prime-coverage-all", required=True)
     parser.add_argument("--output-branchpoint-stop", required=True)
     parser.add_argument("--output-downstream-exon", required=True)
     parser.add_argument("--output-premrna-metaprofile", required=True)
@@ -80,6 +83,7 @@ def main():
 
     branchpoint_metaprofile_rows = read_tsv(args.branchpoint_metaprofile)
     branchpoint_three_prime_rows = read_tsv(args.branchpoint_three_prime)
+    branchpoint_three_prime_all_rows = read_tsv(args.branchpoint_three_prime_all)
     branchpoint_summary_rows = read_tsv(args.branchpoint_summary)
     downstream_metaprofile_rows = read_tsv(args.downstream_metaprofile)
     premrna_metaprofile_rows = read_tsv(args.premrna_metaprofile)
@@ -120,6 +124,26 @@ def main():
     write_tsv(
         args.output_three_prime_coverage,
         three_prime_coverage_rows,
+        [
+            "condition",
+            "offset_nt",
+            "mean_coverage_spanning_percent",
+            "ci95_coverage_spanning_percent",
+        ],
+    )
+
+    three_prime_coverage_all_rows = select_columns(
+        branchpoint_three_prime_all_rows,
+        [
+            "condition",
+            "offset_nt",
+            "mean_coverage_spanning_percent",
+            "ci95_coverage_spanning_percent",
+        ],
+    )
+    write_tsv(
+        args.output_three_prime_coverage_all,
+        three_prime_coverage_all_rows,
         [
             "condition",
             "offset_nt",
@@ -271,6 +295,16 @@ def main():
             "plot_files": args.combined_metaprofile_output,
             "table_file": Path(args.output_three_prime_coverage).name,
             "description": "Condition mean 3' splice site coverage percentages with 95% confidence intervals.",
+        },
+        {
+            "plot_id": "three_prime_splice_site_metaprofile_all_introns",
+            "panel_or_view": "main",
+            "plot_files": args.three_prime_all_output,
+            "table_file": Path(args.output_three_prime_coverage_all).name,
+            "description": (
+                "Condition mean 3' splice site coverage percentages with 95% confidence intervals, "
+                "aggregated over the union of introns with any 3'SS-spanning read in any sample."
+            ),
         },
         {
             "plot_id": "proportion_reads_stop_at_bp",

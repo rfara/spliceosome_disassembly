@@ -1,0 +1,331 @@
+from pathlib import Path
+import shlex
+
+
+WORKFLOW_DIR = Path(workflow.basedir).resolve()
+REPO_ROOT = WORKFLOW_DIR.parent
+RESULTS_DIR = WORKFLOW_DIR / "results"
+LOG_DIR = WORKFLOW_DIR / "logs"
+BENCHMARK_DIR = WORKFLOW_DIR / "benchmarks"
+SCRIPTS_DIR = WORKFLOW_DIR / "scripts"
+R_DIR = WORKFLOW_DIR / "r"
+
+configfile: str(WORKFLOW_DIR / "config.yaml")
+shell.executable("bash")
+
+
+def repo_path(value):
+    path = Path(value)
+    return str(path if path.is_absolute() else (REPO_ROOT / path).resolve())
+
+
+def result_path(*parts):
+    return str(RESULTS_DIR.joinpath(*parts))
+
+
+def log_path(*parts):
+    return str(LOG_DIR.joinpath(*parts))
+
+
+def benchmark_path(*parts):
+    return str(BENCHMARK_DIR.joinpath(*parts))
+
+
+SAMPLES = list(config["samples"])
+MAPPING_ENV = str(WORKFLOW_DIR / "envs" / "mapping.yaml")
+ANALYSIS_ENV = str(WORKFLOW_DIR / "envs" / "analysis.yaml")
+PLOTTING_ENV = str(WORKFLOW_DIR / "envs" / "plotting.yaml")
+
+RRNA_FASTA = repo_path(config["references"]["rrna_fasta"])
+SNRNA_FASTA = repo_path(config["references"]["snrna_fasta"])
+TRANSCRIPTOME_FASTA = repo_path(config["references"]["transcriptome_fasta"])
+GENOME_FASTA = repo_path(config["references"]["genome_fasta"])
+TRANSCRIPTOME_INDEX = result_path("reference", "gencode.v44.pc_transcripts.mmi")
+GENOME_INDEX = result_path("reference", "GRCh38.primary_assembly.genome.mmi")
+GTF = repo_path(config["references"]["gtf"])
+BRANCHPOINTS = repo_path(config["references"]["branchpoints"])
+TRANSCRIPT_DETAILS = repo_path(config["references"]["longest_transcript_details"])
+
+SOURCE_COVERAGE = str(WORKFLOW_DIR / "source_data" / "three_prime_splice_site_coverage.tsv")
+SOURCE_DELETION = str(WORKFLOW_DIR / "source_data" / "branchpoint_deletion_metaprofile.tsv")
+SOURCE_AUC = str(WORKFLOW_DIR / "source_data" / "branchpoint_deletion_auc.tsv")
+DIAGNOSTICS = result_path("source_data", "analysis_counts.tsv")
+PLOT_COVERAGE = result_path("plots", "tfip11_dhx35_3ss_coverage_metaprofile.pdf")
+PLOT_DELETION = result_path("plots", "tfip11_dhx35_deletion_bp_metaprofile.pdf")
+INIT_SENTINEL = result_path(".workflow_dirs_initialized")
+WORKFLOW_DIRS = [
+    result_path("reference"),
+    result_path("alignment", "rrna"),
+    result_path("alignment", "snrna"),
+    result_path("alignment", "transcriptome"),
+    result_path("alignment", "genome"),
+    str(WORKFLOW_DIR / "source_data"),
+    result_path("source_data"),
+    result_path("plots"),
+    log_path("reference"),
+    log_path("mapping"),
+    log_path("analysis"),
+    log_path("plots"),
+    benchmark_path("reference"),
+    benchmark_path("mapping"),
+    benchmark_path("analysis"),
+]
+
+
+rule all:
+    input:
+        PLOT_COVERAGE,
+        PLOT_DELETION,
+        SOURCE_COVERAGE,
+        SOURCE_DELETION,
+        SOURCE_AUC,
+        DIAGNOSTICS,
+
+
+rule initialize_workdirs:
+    output:
+        touch(INIT_SENTINEL)
+    params:
+        directories=WORKFLOW_DIRS
+    conda:
+        ANALYSIS_ENV
+    log:
+        result_path("initialize_workdirs.log")
+    shell:
+        """
+        mkdir -p {params.directories:q} > {log:q} 2>&1
+        touch {output:q} 2>> {log:q}
+        """
+
+
+rule download_transcriptome:
+    input:
+        init=INIT_SENTINEL,
+        script=str(REPO_ROOT / "shortread" / "scripts" / "download_reference.py"),
+    output:
+        TRANSCRIPTOME_FASTA
+    params:
+        url=config["references"]["transcriptome_url"],
+        md5=config["references"]["transcriptome_compressed_md5"],
+    conda:
+        ANALYSIS_ENV
+    log:
+        log_path("reference", "download_transcriptome.log")
+    shell:
+        """
+        python {input.script:q} \
+          --url {params.url:q} --output {output:q} \
+          --compressed-md5 {params.md5:q} --decompress-gzip > {log:q} 2>&1
+        """
+
+
+rule download_genome:
+    input:
+        init=INIT_SENTINEL,
+        script=str(REPO_ROOT / "shortread" / "scripts" / "download_reference.py"),
+    output:
+        GENOME_FASTA
+    params:
+        url=config["references"]["genome_url"],
+        md5=config["references"]["genome_compressed_md5"],
+    conda:
+        ANALYSIS_ENV
+    log:
+        log_path("reference", "download_genome.log")
+    shell:
+        """
+        python {input.script:q} \
+          --url {params.url:q} --output {output:q} \
+          --compressed-md5 {params.md5:q} --decompress-gzip > {log:q} 2>&1
+        """
+
+
+rule index_transcriptome:
+    input:
+        TRANSCRIPTOME_FASTA
+    output:
+        TRANSCRIPTOME_INDEX
+    threads:
+        config["resources"]["mapping_threads"]
+    conda:
+        MAPPING_ENV
+    log:
+        log_path("reference", "index_transcriptome.log")
+    benchmark:
+        benchmark_path("reference", "index_transcriptome.tsv")
+    shell:
+        "minimap2 -t {threads} -d {output:q} {input:q} > {log:q} 2>&1"
+
+
+rule index_genome:
+    input:
+        GENOME_FASTA
+    output:
+        GENOME_INDEX
+    threads:
+        config["resources"]["mapping_threads"]
+    conda:
+        MAPPING_ENV
+    log:
+        log_path("reference", "index_genome.log")
+    benchmark:
+        benchmark_path("reference", "index_genome.tsv")
+    shell:
+        "minimap2 -t {threads} -d {output:q} {input:q} > {log:q} 2>&1"
+
+
+rule filter_rrna:
+    input:
+        init=INIT_SENTINEL,
+        fastq=lambda wildcards: repo_path(config["samples"][wildcards.sample]),
+        reference=RRNA_FASTA,
+    output:
+        all_bam=temp(result_path("alignment", "rrna", "{sample}.all.bam")),
+        unmapped=temp(result_path("alignment", "rrna", "{sample}.unmapped.fastq")),
+    threads:
+        config["resources"]["mapping_threads"]
+    conda:
+        MAPPING_ENV
+    log:
+        log_path("mapping", "rrna.{sample}.log")
+    benchmark:
+        benchmark_path("mapping", "rrna.{sample}.tsv")
+    shell:
+        """
+        minimap2 --MD -ax map-ont -t {threads} {input.reference:q} {input.fastq:q} 2> {log:q} \
+          | samtools view -b -o {output.all_bam:q} -
+        samtools fastq -@ {threads} -f 4 {output.all_bam:q} > {output.unmapped:q} 2>> {log:q}
+        """
+
+
+rule filter_snrna:
+    input:
+        fastq=result_path("alignment", "rrna", "{sample}.unmapped.fastq"),
+        reference=SNRNA_FASTA,
+    output:
+        all_bam=temp(result_path("alignment", "snrna", "{sample}.all.bam")),
+        unmapped=temp(result_path("alignment", "snrna", "{sample}.unmapped.fastq")),
+    threads:
+        config["resources"]["mapping_threads"]
+    conda:
+        MAPPING_ENV
+    log:
+        log_path("mapping", "snrna.{sample}.log")
+    benchmark:
+        benchmark_path("mapping", "snrna.{sample}.tsv")
+    shell:
+        """
+        minimap2 --MD -ax map-ont -t {threads} {input.reference:q} {input.fastq:q} 2> {log:q} \
+          | samtools view -b -o {output.all_bam:q} -
+        samtools fastq -@ {threads} -f 4 {output.all_bam:q} > {output.unmapped:q} 2>> {log:q}
+        """
+
+
+rule filter_transcriptome:
+    input:
+        fastq=result_path("alignment", "snrna", "{sample}.unmapped.fastq"),
+        reference=TRANSCRIPTOME_INDEX,
+    output:
+        all_bam=temp(result_path("alignment", "transcriptome", "{sample}.all.bam")),
+        unmapped=temp(result_path("alignment", "transcriptome", "{sample}.unmapped.fastq")),
+    threads:
+        config["resources"]["mapping_threads"]
+    conda:
+        MAPPING_ENV
+    log:
+        log_path("mapping", "transcriptome.{sample}.log")
+    benchmark:
+        benchmark_path("mapping", "transcriptome.{sample}.tsv")
+    shell:
+        """
+        minimap2 --MD -ax map-ont -t {threads} {input.reference:q} {input.fastq:q} 2> {log:q} \
+          | samtools view -b -o {output.all_bam:q} -
+        samtools fastq -@ {threads} -f 4 {output.all_bam:q} > {output.unmapped:q} 2>> {log:q}
+        """
+
+
+rule align_genome:
+    input:
+        fastq=result_path("alignment", "transcriptome", "{sample}.unmapped.fastq"),
+        reference=GENOME_INDEX,
+    output:
+        bam=result_path("alignment", "genome", "{sample}.bam"),
+        bai=result_path("alignment", "genome", "{sample}.bam.bai"),
+    params:
+        sort_memory=config["resources"]["samtools_sort_memory"]
+    threads:
+        config["resources"]["mapping_threads"]
+    conda:
+        MAPPING_ENV
+    log:
+        log_path("mapping", "genome.{sample}.log")
+    benchmark:
+        benchmark_path("mapping", "genome.{sample}.tsv")
+    shell:
+        """
+        minimap2 --MD -ax map-ont -t {threads} {input.reference:q} {input.fastq:q} 2> {log:q} \
+          | samtools view -u -F 4 - \
+          | samtools sort -@ {threads} -m {params.sort_memory} -o {output.bam:q} - 2>> {log:q}
+        samtools index -@ {threads} {output.bam:q} {output.bai:q} 2>> {log:q}
+        """
+
+
+rule summarize_metaprofiles:
+    input:
+        script=str(SCRIPTS_DIR / "summarize_metaprofiles.py"),
+        bams=expand(result_path("alignment", "genome", "{sample}.bam"), sample=SAMPLES),
+        bais=expand(result_path("alignment", "genome", "{sample}.bam.bai"), sample=SAMPLES),
+        gtf=GTF,
+        branchpoints=BRANCHPOINTS,
+        transcript_details=TRANSCRIPT_DETAILS,
+    output:
+        coverage=SOURCE_COVERAGE,
+        deletion=SOURCE_DELETION,
+        auc=SOURCE_AUC,
+        diagnostics=DIAGNOSTICS,
+    conda:
+        ANALYSIS_ENV
+    log:
+        log_path("analysis", "summarize_metaprofiles.log")
+    benchmark:
+        benchmark_path("analysis", "summarize_metaprofiles.tsv")
+    params:
+        alignments=" ".join(
+            f"--alignment {shlex.quote(sample)}={shlex.quote(result_path('alignment', 'genome', sample + '.bam'))}"
+            for sample in SAMPLES
+        ),
+        mapq=config["analysis"]["mapq_threshold"],
+        intron_stretch=config["analysis"]["intron_stretch"],
+        three_prime=config["analysis"]["three_prime_half_width"],
+        branchpoint=config["analysis"]["branchpoint_half_width"],
+    shell:
+        """
+        python {input.script:q} {params.alignments} \
+          --gtf {input.gtf:q} --branchpoints {input.branchpoints:q} \
+          --transcript-details {input.transcript_details:q} \
+          --coverage-output {output.coverage:q} --deletion-output {output.deletion:q} \
+          --auc-output {output.auc:q} --diagnostics-output {output.diagnostics:q} \
+          --mapq-threshold {params.mapq} --intron-stretch {params.intron_stretch} \
+          --three-prime-half-width {params.three_prime} \
+          --branchpoint-half-width {params.branchpoint} > {log:q} 2>&1
+        """
+
+
+rule plot_metaprofiles:
+    input:
+        script=str(R_DIR / "plot_metaprofiles.R"),
+        coverage=SOURCE_COVERAGE,
+        deletion=SOURCE_DELETION,
+        auc=SOURCE_AUC,
+    output:
+        coverage=PLOT_COVERAGE,
+        deletion=PLOT_DELETION,
+    conda:
+        PLOTTING_ENV
+    log:
+        log_path("plots", "metaprofiles.log")
+    shell:
+        """
+        Rscript {input.script:q} {input.coverage:q} {input.deletion:q} \
+          {input.auc:q} {output.coverage:q} {output.deletion:q} > {log:q} 2>&1
+        """

@@ -14,3 +14,13 @@ __pycache__/
 *.py[cod]
 *.nbc
 *.nbi
+.DS_Store
+
+# Long-read inputs deposited at GEO and reproducible workflow intermediates.
+longread/reads/*
+longread/results/*
+!longread/results/plots/
+longread/results/plots/*
+!longread/results/plots/*.pdf
+longread/logs/*
+longread/benchmarks/*

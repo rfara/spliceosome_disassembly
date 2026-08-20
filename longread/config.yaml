@@ -1,0 +1,26 @@
+samples:
+  tfip11: longread/reads/tfip11.fastq.gz
+  dhx35: longread/reads/dhx35.fastq.gz
+
+references:
+  rrna_fasta: annotation/rdna.fa
+  snrna_fasta: annotation/gc44.basic.snrna.fa
+  transcriptome_fasta: longread/results/reference/gencode.v44.pc_transcripts.fa
+  transcriptome_url: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.pc_transcripts.fa.gz
+  transcriptome_compressed_md5: 1d6f02c471e76f421e36921ddb5715a1
+  genome_fasta: longread/results/reference/GRCh38.primary_assembly.genome.fa
+  genome_url: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/GRCh38.primary_assembly.genome.fa.gz
+  genome_compressed_md5: 9c3fc2ca260a767530dddb0f26721a6b
+  gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz
+  branchpoints: annotation/colaseq_branchpoints_scores.txt
+  longest_transcript_details: longread/reference/gc44basic_longesttranscript_details.tsv.gz
+
+analysis:
+  mapq_threshold: 20
+  intron_stretch: 6
+  three_prime_half_width: 100
+  branchpoint_half_width: 60
+
+resources:
+  mapping_threads: 16
+  samtools_sort_memory: 2G

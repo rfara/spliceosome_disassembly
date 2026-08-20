@@ -58,8 +58,8 @@ dedup:
 branchpoint_analysis:
   mane_gtf: annotation/gencode.v44.primary_assembly.basic.annotation.gtf.gz
   branchpoints: annotation/colaseq_branchpoints_scores.txt
-  anchor_window: 5
-  anchor_upstream: 5
+  anchor_window: 10
+  anchor_upstream: 10
   anchor_downstream: 1
   downstream_exon_min_offset: 5
   profile_upstream: 100
