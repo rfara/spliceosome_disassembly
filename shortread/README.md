@@ -23,23 +23,45 @@ It also contains `plot_analysis_counts.tsv`, which summarizes the read and featu
 
 ## Running Locally
 
-Create the conda environment:
-
-```bash
-conda env create -f shortread/envs/rnaseq_pipeline.yml
-```
-
-Run the workflow:
+With Snakemake and Conda available, run the workflow from the repository root:
 
 ```bash
 snakemake -s shortread/Snakefile --cores 16 --use-conda
 ```
 
+No manual data download is required. The first run uses the six SRA runs linked
+from [GEO accession GSE329374](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE329374):
+
+| Sample | SRA run |
+|---|---|
+| `ILS_1` | `SRR38300414` |
+| `ILS_2` | `SRR38300413` |
+| `ILS_3` | `SRR38300412` |
+| `DIS_1` | `SRR38300411` |
+| `DIS_2` | `SRR38300410` |
+| `DIS_3` | `SRR38300409` |
+
+For each sample, the workflow downloads and validates the SRA run, converts it
+to paired FASTQs with `fasterq-dump`, and gzip-compresses the reads under
+`shortread/reads/`. These files are ignored by Git and reused on later runs.
+The temporary SRA and uncompressed FASTQs are removed after successful
+conversion; nevertheless, the download jobs require substantial temporary disk
+space.
+
+If NCBI's accession resolver is temporarily unavailable, the workflow uses the
+checksum-pinned NCBI [SRA Lite](https://www.ncbi.nlm.nih.gov/sra/docs/sra-data-formats/)
+URLs in [`config.yaml`](config.yaml). SRA Lite preserves the read sequences but
+simplifies base-quality scores. The analysis does not quality-filter reads,
+although raw-read FastQC quality distributions can differ when this fallback is
+used.
+
 The main sequencing parameter to check before a first run is `star.sjdb_overhang` in `shortread/config.yaml`; it should be read length minus one.
 
 The workflow uses the rDNA FASTA, snRNA FASTA, GENCODE v44 primary-assembly GTF, and branchpoint table bundled under `annotation/`. The GRCh38 primary-assembly genome FASTA is downloaded by Snakemake from GENCODE release 44 and verified with the recorded MD5 checksum before STAR indexing.
 
-Raw FASTQs are not bundled. Until public read accessions are available, place them at the paths listed under `samples` in `shortread/config.yaml`, or update those sample paths before running.
+The sample-to-run mapping and canonical raw-read paths are recorded in
+[`config.yaml`](config.yaml). If the canonical FASTQs already exist, Snakemake
+skips their download.
 
 ## Running On The Cluster
 

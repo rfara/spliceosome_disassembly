@@ -1,8 +1,9 @@
 # Long-read processing before the deposited FASTQs
 
-The GEO submission starts from the demultiplexed, adapter-trimmed FASTQ files in
-`longread/reads/`; basecalling, demultiplexing, and trimming are therefore
-documented here but are intentionally outside the Snakemake workflow.
+The GEO submission starts from demultiplexed, adapter-trimmed FASTQ files.
+Snakemake downloads these deposited reads into `longread/reads/`; basecalling,
+demultiplexing, and trimming are therefore documented here but remain outside
+the workflow.
 
 The following commands are transcribed from the cluster scripts in
 `20250129_tfip_dhx35`. Dorado 0.9.1 was used. The Cutadapt version was not
@@ -64,5 +65,6 @@ for input in demux_fastq/*.fastq; do
 done
 ```
 
-The two resulting analysis inputs were renamed on import to the repository as
+The two resulting analysis inputs were deposited under SRA runs `SRR40278264`
+and `SRR40278263`. The Snakemake download rule recreates them locally as
 `longread/reads/tfip11.fastq.gz` and `longread/reads/dhx35.fastq.gz`.

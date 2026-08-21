@@ -42,6 +42,8 @@ def benchmark_path(*parts):
 SAMPLES = list(config["samples"].keys())
 BRANCHPOINT_CFG = config["branchpoint_analysis"]
 PREMRNA_CFG = config["premrna_analysis"]
+RAW_R1_PATTERN = repo_path(config["raw_reads"]["r1_pattern"])
+RAW_R2_PATTERN = repo_path(config["raw_reads"]["r2_pattern"])
 
 BT2_SUFFIXES = [
     ".1.bt2",
@@ -273,16 +275,13 @@ def bowtie2_index_outputs(prefix):
 
 
 def sample_fastq(wildcards):
-    return repo_path(config["samples"][wildcards.sample])
+    return RAW_R1_PATTERN.format(sample=wildcards.sample)
 
 
 def sample_fastq_r2(wildcards):
-    r1 = config["samples"][wildcards.sample]
-    if "_R1_" in r1:
-        return repo_path(r1.replace("_R1_", "_R2_"))
-    if "_R1." in r1:
-        return repo_path(r1.replace("_R1.", "_R2."))
-    raise ValueError(f"Could not derive R2 path from R1 path: {r1}")
+    return RAW_R2_PATTERN.format(sample=wildcards.sample)
+
+
 def sample_condition(sample):
     sample_conditions = BRANCHPOINT_CFG.get("sample_conditions", {})
     if sample in sample_conditions:
@@ -397,6 +396,7 @@ STAR_GENOME_GENERATE_EXTRA = star_genome_generate_extra()
 STAR_ALIGN_EXTRA = star_align_extra()
 INIT_SENTINEL = results_path(".workflow_dirs_initialized")
 WORKFLOW_DIRS = [
+    str(Path(RAW_R1_PATTERN).parent),
     results_path("reference", "genome"),
     results_path("reference", "rrna"),
     results_path("reference", "snrna"),
@@ -434,9 +434,11 @@ WORKFLOW_DIRS = [
     results_path("qc", "rna_content"),
     results_path("qc", "star_unmapped"),
     results_path("tmp", "premap"),
+    results_path("tmp", "sra"),
     results_path("tmp", "trim"),
     results_path("tmp", "umi_dedup"),
     log_path("reference"),
+    log_path("download"),
     log_path("trim"),
     log_path("umi"),
     log_path("premap_rrna"),
@@ -460,6 +462,7 @@ WORKFLOW_DIRS = [
     log_path("r_plots"),
     log_path("slurm"),
     benchmark_path("reference"),
+    benchmark_path("download"),
     benchmark_path("trim"),
     benchmark_path("umi"),
     benchmark_path("premap_rrna"),
@@ -577,6 +580,72 @@ rule initialize_workdirs:
         set -euo pipefail
         mkdir -p {WORKFLOW_DIRS:q}
         touch {output}
+        """
+
+
+rule download_geo_fastqs:
+    input:
+        init=INIT_SENTINEL,
+        downloader=str((SCRIPTS_DIR / "download_reference.py").resolve())
+    output:
+        r1=RAW_R1_PATTERN,
+        r2=RAW_R2_PATTERN
+    log:
+        log_path("download", "{sample}.log")
+    benchmark:
+        benchmark_path("download", "{sample}.tsv")
+    threads: config["resources"]["download_threads"]
+    conda:
+        str(ENV_YAML)
+    params:
+        accession=lambda wildcards: config["samples"][wildcards.sample]["accession"],
+        fallback_url=lambda wildcards: config["samples"][wildcards.sample]["fallback_url"],
+        fallback_md5=lambda wildcards: config["samples"][wildcards.sample]["fallback_md5"],
+        tmp_root=results_path("tmp", "sra"),
+        benchmark_dir=lambda wildcards: str(Path(benchmark_path("download", f"{wildcards.sample}.tsv")).parent),
+        cluster=lambda wildcards: slurm_cluster_args(
+            "c_medium",
+            "24G",
+            "geo_fastq",
+            log_path("slurm", f"download.{wildcards.sample}.%A.log"),
+            config["resources"]["download_threads"],
+        )
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output.r1:q})" "$(dirname {log:q})" "{params.benchmark_dir}" "{params.tmp_root}"
+        exec > {log:q} 2>&1
+        tmpdir="$(mktemp -d "{params.tmp_root}/{wildcards.sample}.XXXXXX")"
+        trap 'rm -rf "$tmpdir"' EXIT
+        mkdir -p "$tmpdir/sra" "$tmpdir/fastq" "$tmpdir/fasterq_tmp"
+
+        run={params.accession:q}
+        if ! prefetch --max-size u --output-directory "$tmpdir/sra" "$run"; then
+          echo "Accession lookup failed; using the checksum-pinned NCBI fallback URL."
+          rm -rf "$tmpdir/sra/$run"
+          mkdir -p "$tmpdir/sra/$run"
+          python {input.downloader:q} \
+            --url {params.fallback_url:q} \
+            --compressed-md5 {params.fallback_md5:q} \
+            --output "$tmpdir/sra/$run/$run.sra"
+        fi
+        vdb-validate "$tmpdir/sra/$run"
+        fasterq-dump \
+          --split-files \
+          --threads {threads} \
+          --temp "$tmpdir/fasterq_tmp" \
+          --outdir "$tmpdir/fastq" \
+          "$tmpdir/sra/$run"
+
+        downloaded_r1="$tmpdir/fastq/{params.accession}_1.fastq"
+        downloaded_r2="$tmpdir/fastq/{params.accession}_2.fastq"
+        test -s "$downloaded_r1"
+        test -s "$downloaded_r2"
+        pigz --processes {threads} "$downloaded_r1"
+        pigz --processes {threads} "$downloaded_r2"
+        gzip -t "$downloaded_r1.gz" "$downloaded_r2.gz"
+        mv "$downloaded_r1.gz" {output.r1:q}
+        mv "$downloaded_r2.gz" {output.r2:q}
         """
 
 

@@ -32,9 +32,11 @@ def benchmark_path(*parts):
 
 
 SAMPLES = list(config["samples"])
+DOWNLOAD_ENV = str(WORKFLOW_DIR / "envs" / "download.yaml")
 MAPPING_ENV = str(WORKFLOW_DIR / "envs" / "mapping.yaml")
 ANALYSIS_ENV = str(WORKFLOW_DIR / "envs" / "analysis.yaml")
 PLOTTING_ENV = str(WORKFLOW_DIR / "envs" / "plotting.yaml")
+RAW_FASTQ_PATTERN = repo_path(config["raw_reads"]["fastq_pattern"])
 
 RRNA_FASTA = repo_path(config["references"]["rrna_fasta"])
 SNRNA_FASTA = repo_path(config["references"]["snrna_fasta"])
@@ -54,6 +56,7 @@ PLOT_COVERAGE = result_path("plots", "tfip11_dhx35_3ss_coverage_metaprofile.pdf"
 PLOT_DELETION = result_path("plots", "tfip11_dhx35_deletion_bp_metaprofile.pdf")
 INIT_SENTINEL = result_path(".workflow_dirs_initialized")
 WORKFLOW_DIRS = [
+    str(Path(RAW_FASTQ_PATTERN).parent),
     result_path("reference"),
     result_path("alignment", "rrna"),
     result_path("alignment", "snrna"),
@@ -62,11 +65,14 @@ WORKFLOW_DIRS = [
     str(WORKFLOW_DIR / "source_data"),
     result_path("source_data"),
     result_path("plots"),
+    result_path("tmp", "sra"),
+    log_path("download"),
     log_path("reference"),
     log_path("mapping"),
     log_path("analysis"),
     log_path("plots"),
     benchmark_path("reference"),
+    benchmark_path("download"),
     benchmark_path("mapping"),
     benchmark_path("analysis"),
 ]
@@ -95,6 +101,59 @@ rule initialize_workdirs:
         """
         mkdir -p {params.directories:q} > {log:q} 2>&1
         touch {output:q} 2>> {log:q}
+        """
+
+
+rule download_geo_fastq:
+    input:
+        init=INIT_SENTINEL,
+        downloader=str(REPO_ROOT / "shortread" / "scripts" / "download_reference.py")
+    output:
+        RAW_FASTQ_PATTERN
+    params:
+        accession=lambda wildcards: config["samples"][wildcards.sample]["accession"],
+        fallback_url=lambda wildcards: config["samples"][wildcards.sample]["fallback_url"],
+        fallback_md5=lambda wildcards: config["samples"][wildcards.sample]["fallback_md5"],
+        tmp_root=result_path("tmp", "sra"),
+    threads:
+        config["resources"]["download_threads"]
+    conda:
+        DOWNLOAD_ENV
+    log:
+        log_path("download", "{sample}.log")
+    benchmark:
+        benchmark_path("download", "{sample}.tsv")
+    shell:
+        r"""
+        set -euo pipefail
+        mkdir -p "$(dirname {output:q})" "$(dirname {log:q})" "{params.tmp_root}"
+        exec > {log:q} 2>&1
+        tmpdir="$(mktemp -d "{params.tmp_root}/{wildcards.sample}.XXXXXX")"
+        trap 'rm -rf "$tmpdir"' EXIT
+        mkdir -p "$tmpdir/sra" "$tmpdir/fastq" "$tmpdir/fasterq_tmp"
+
+        run={params.accession:q}
+        if ! prefetch --max-size u --output-directory "$tmpdir/sra" "$run"; then
+          echo "Accession lookup failed; using the checksum-pinned NCBI fallback URL."
+          rm -rf "$tmpdir/sra/$run"
+          mkdir -p "$tmpdir/sra/$run"
+          python {input.downloader:q} \
+            --url {params.fallback_url:q} \
+            --compressed-md5 {params.fallback_md5:q} \
+            --output "$tmpdir/sra/$run/$run.sra"
+        fi
+        vdb-validate "$tmpdir/sra/$run"
+        fasterq-dump \
+          --threads {threads} \
+          --temp "$tmpdir/fasterq_tmp" \
+          --outdir "$tmpdir/fastq" \
+          "$tmpdir/sra/$run"
+
+        downloaded="$tmpdir/fastq/{params.accession}.fastq"
+        test -s "$downloaded"
+        pigz --processes {threads} "$downloaded"
+        gzip -t "$downloaded.gz"
+        mv "$downloaded.gz" {output:q}
         """
 
 
@@ -177,7 +236,7 @@ rule index_genome:
 rule filter_rrna:
     input:
         init=INIT_SENTINEL,
-        fastq=lambda wildcards: repo_path(config["samples"][wildcards.sample]),
+        fastq=lambda wildcards: RAW_FASTQ_PATTERN.format(sample=wildcards.sample),
         reference=RRNA_FASTA,
     output:
         all_bam=temp(result_path("alignment", "rrna", "{sample}.all.bam")),

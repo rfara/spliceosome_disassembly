@@ -1,10 +1,35 @@
 samples:
-  ILS_1: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373584/373584_S1_R1_001.fastq.gz
-  ILS_2: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373585/373585_S2_R1_001.fastq.gz
-  ILS_3: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373586/373586_S3_R1_001.fastq.gz
-  DIS_1: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373587/373587_S4_R1_001.fastq.gz
-  DIS_2: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373588/373588_S5_R1_001.fastq.gz
-  DIS_3: shortread/reads/23GLCKLT3_8_R20155_20260321/demultiplexed/373589/373589_S6_R1_001.fastq.gz
+  # The checksum-pinned SRA Lite files are fallbacks for temporary NCBI
+  # accession-resolver failures. They preserve sequences but simplify qualities.
+  ILS_1:
+    accession: SRR38300414
+    fallback_url: https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos11/sra-pub-zq-1140/SRR038/38300/SRR38300414/SRR38300414.lite.1
+    fallback_md5: 7e6f5515b084f9bff46a6fabb398ff9c
+  ILS_2:
+    accession: SRR38300413
+    fallback_url: https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos11/sra-pub-zq-1140/SRR038/38300/SRR38300413/SRR38300413.lite.1
+    fallback_md5: baea914e167b71af706e4e9cc01efdd7
+  ILS_3:
+    accession: SRR38300412
+    fallback_url: https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos11/sra-pub-zq-1140/SRR038/38300/SRR38300412/SRR38300412.lite.1
+    fallback_md5: f342e5b6972da6b1b2fe41f455941000
+  DIS_1:
+    accession: SRR38300411
+    fallback_url: https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos11/sra-pub-zq-1140/SRR038/38300/SRR38300411/SRR38300411.lite.1
+    fallback_md5: f721464f9e8f73c4a11a433dfd714280
+  DIS_2:
+    accession: SRR38300410
+    fallback_url: https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos11/sra-pub-zq-1140/SRR038/38300/SRR38300410/SRR38300410.lite.1
+    fallback_md5: eb4c97f55ce3c37d8d4227e566d63c30
+  DIS_3:
+    accession: SRR38300409
+    fallback_url: https://sra-downloadb.be-md.ncbi.nlm.nih.gov/sos11/sra-pub-zq-1140/SRR038/38300/SRR38300409/SRR38300409.lite.1
+    fallback_md5: b55f2cf58fa97291b2ffafaf54479c9c
+
+raw_reads:
+  geo_accession: GSE329374
+  r1_pattern: shortread/reads/{sample}_R1.fastq.gz
+  r2_pattern: shortread/reads/{sample}_R2.fastq.gz
 
 references:
   rrna_fasta: annotation/rdna.fa
@@ -81,6 +106,7 @@ slurm:
   sbatch_extra: ""
 
 resources:
+  download_threads: 8
   trim_threads: 8
   bowtie2_build_threads: 8
   premap_threads: 16
